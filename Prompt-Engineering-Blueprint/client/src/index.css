@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', sans-serif;
+    --font-display: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Enterprise Compliance Palette based on Blueprint */
+    --background: 210 40% 98%; /* #F8FAFC - Background Slate */
+    --foreground: 213 65% 10%; /* Very dark navy for text */
+    
+    --card: 0 0% 100%;
+    --card-foreground: 213 65% 10%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 65% 10%;
+    
+    --primary: 213 65% 19%; /* #112E51 - Primary Navy */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 213 65% 19%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 213 65% 19%;
+    
+    --destructive: 3 80% 43%; /* #C71F16 - Critical Red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 214 80% 43%; /* Trust Blue for focus rings */
+
+    --radius: 0.5rem;
+
+    /* Custom Blueprint Colors */
+    --navy: 213 65% 19%;
+    --trust: 214 80% 43%;
+    --warning: 30 80% 55%;
+    --critical: 3 80% 43%;
+    --success: 128 80% 43%;
+  }
+
+  .dark {
+    --background: 213 65% 10%;
+    --foreground: 210 40% 98%;
+    
+    --card: 213 65% 14%;
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 213 65% 14%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 210 40% 98%;
+    --primary-foreground: 213 65% 19%;
+    
+    --secondary: 213 65% 19%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 213 65% 19%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    --accent: 213 65% 19%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 3 80% 43%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 65% 19%;
+    --input: 213 65% 19%;
+    --ring: 214 80% 43%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-shadow-sm {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+  /* Animation utilities */
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
