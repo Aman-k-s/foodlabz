@@ -1,17 +1,6 @@
 from django.db import models
-
-class Lab(models.Model):
-    name = models.CharField(max_length=255)
-    accreditation_no = models.CharField(max_length=100)
-    ulr_prefix = models.CharField(max_length=10)
-    accreditation_valid_till = models.DateField()
-
-    def __str__(self):
-        return self.name
-
-
 class Report(models.Model):
-    file = models.FileField(upload_to='reports/')
+    file = models.FileField(upload_to="reports/")
     file_hash = models.CharField(max_length=64, unique=True)
 
     lab_name = models.CharField(max_length=255, null=True, blank=True)
@@ -19,16 +8,19 @@ class Report(models.Model):
     ulr_number = models.CharField(max_length=50, null=True, blank=True)
 
     validation_score = models.IntegerField(default=0)
-    status = models.CharField(max_length=20, default="PENDING")
+    status = models.CharField(max_length=30, default="PENDING")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-from django.db import models
+    def __str__(self):
+        return f"{self.accreditation_no} - {self.status}"
+
 
 class LabMaster(models.Model):
     lab_id = models.CharField(max_length=50, unique=True)
     laboratory_name = models.CharField(max_length=255)
-    cert_no = models.CharField(max_length=100, unique=True)
+    cert_no = models.CharField(max_length=100)
+    labtype = models.CharField(max_length=100)
 
     issue_date = models.DateField(null=True, blank=True)
     to_date = models.DateField(null=True, blank=True)
@@ -37,8 +29,8 @@ class LabMaster(models.Model):
     city = models.CharField(max_length=100, null=True, blank=True)
     state = models.CharField(max_length=100, null=True, blank=True)
 
-    def __str__(self):
-        return f"{self.laboratory_name} - {self.cert_no}"
-    
+    class Meta:
+        unique_together = ("cert_no", "labtype")
 
-    
+    def __str__(self):
+        return f"{self.laboratory_name} - {self.cert_no} ({self.labtype})"
