@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Report
+from .models import LabMaster, Report
 from .utils import (
     extract_fields,
     extract_text_from_pdf,
@@ -84,3 +84,32 @@ class UploadReportView(APIView):
             )
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+
+class ReportByUlrView(APIView):
+    def get(self, request, ulr):
+        report = Report.objects.filter(ulr_number=ulr).order_by("-created_at").first()
+        if not report:
+            return Response({"message": "Certificate not found for the provided ULR"}, status=404)
+
+        lab = None
+        if report.accreditation_no:
+            lab = LabMaster.objects.filter(cert_no=report.accreditation_no).first()
+
+        valid_till = (lab.extend_date or lab.to_date) if lab else None
+        issue_date = str(lab.issue_date) if lab and lab.issue_date else None
+
+        return Response(
+            {
+                "success": True,
+                "data": {
+                    "lab_name": report.lab_name,
+                    "labtype": lab.labtype if lab else None,
+                    "certificate_no": report.accreditation_no,
+                    "ulr_number": report.ulr_number,
+                    "status": report.status,
+                    "issue_date": issue_date,
+                    "valid_till": valid_till,
+                },
+            }
+        )
