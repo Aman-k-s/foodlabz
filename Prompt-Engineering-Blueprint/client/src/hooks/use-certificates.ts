@@ -34,9 +34,9 @@ type DjangoListEnvelope = {
 };
 
 const DJANGO_API_BASE = (
-  import.meta.env.VITE_DJANGO_API_BASE ||
-  import.meta.env.VITE_BACKEND_URL ||
-  ""
+  import.meta.env.PROD
+    ? ""
+    : import.meta.env.VITE_DJANGO_API_BASE || import.meta.env.VITE_BACKEND_URL || ""
 ).replace(/\/$/, "");
 
 function djangoUrl(path: string): string {
