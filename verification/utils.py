@@ -1,4 +1,5 @@
 import hashlib
+import os
 import re
 from datetime import datetime
 
@@ -7,7 +8,9 @@ from pdf2image import convert_from_path
 
 from .models import LabMaster, Report
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+_tesseract_cmd = os.getenv("TESSERACT_CMD")
+if _tesseract_cmd:
+    pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
 
 CERT_PATTERN = re.compile(r"\b(TC|CC|RC)\s*[- ]?\s*(\d{4,6})\b")
 CERT_LINE_PATTERN = re.compile(
@@ -49,10 +52,12 @@ def generate_file_hash(file):
 
 
 def extract_text_from_pdf(pdf_path):
-    images = convert_from_path(
-        pdf_path,
-        poppler_path=r"C:\poppler\poppler-25.12.0\Library\bin",
-    )
+    poppler_path = os.getenv("POPPLER_PATH")
+    convert_kwargs = {}
+    if poppler_path:
+        convert_kwargs["poppler_path"] = poppler_path
+
+    images = convert_from_path(pdf_path, **convert_kwargs)
     text = ""
     for image in images:
         text += pytesseract.image_to_string(image)
