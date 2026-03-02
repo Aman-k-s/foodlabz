@@ -13,9 +13,9 @@ _tesseract_cmd = os.getenv("TESSERACT_CMD")
 if _tesseract_cmd:
     pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
 
-CERT_PATTERN = re.compile(r"\b(TC|CC|RC)\s*[- ]?\s*(\d{4,6})\b")
+CERT_PATTERN = re.compile(r"\b(TC|CC|RC)\s*[-~ ]?\s*(\d{4,6})\b")
 CERT_LINE_PATTERN = re.compile(
-    r"^\s*(T\s*C|C\s*C|R\s*C)\s*[-\u2010\u2011\u2012\u2013\u2014]?\s*((?:\d\s*){4,6})\s*$"
+    r"^\s*(T\s*C|C\s*C|R\s*C)\s*[-~\u2010\u2011\u2012\u2013\u2014]?\s*((?:\d\s*){4,6})\s*$"
 )
 ULR_LABEL_PATTERN = re.compile(
     r"\bU\s*L\s*R(?:\s*(?:NO|NO\.|NUMBER))?[:\s\-]*([A-Z0-9\s\-/]{10,32})\b"
@@ -60,9 +60,17 @@ def _env_int(name, default):
 
 
 def extract_text_from_pdf(pdf_path):
-    text = _extract_text_with_pdftotext(pdf_path)
+    text = _extract_text_with_pdftotext(pdf_path) or ""
+
+    # Certificate number is often printed as an image label below the NABL logo.
+    # Keep OCR on page 1 as a light supplement even when pdftotext succeeds.
+    page1_ocr_text = _extract_page_ocr_text(pdf_path, first_page=1, last_page=1)
+    if text and page1_ocr_text:
+        return f"{text}\n{page1_ocr_text}"
     if text:
         return text
+    if page1_ocr_text:
+        return page1_ocr_text
 
     poppler_path = os.getenv("POPPLER_PATH")
     max_pages = _env_int("OCR_MAX_PAGES", 2)
@@ -81,9 +89,12 @@ def extract_text_from_pdf(pdf_path):
         fmt="jpeg",
         **convert_kwargs,
     )
-    text = ""
-    for image in images:
-        text += pytesseract.image_to_string(image, config="--oem 1 --psm 6", timeout=20)
+    text = _ocr_images(images)
+    if not text.strip():
+        raise RuntimeError(
+            "OCR could not extract readable text within timeout. "
+            "Try a clearer/smaller PDF or increase OCR_TIMEOUT_SECONDS."
+        )
     return text
 
 
@@ -104,6 +115,47 @@ def _extract_text_with_pdftotext(pdf_path):
 
     output = (result.stdout or "").strip()
     return output or None
+
+
+def _extract_page_ocr_text(pdf_path, first_page, last_page):
+    poppler_path = os.getenv("POPPLER_PATH")
+    ocr_dpi = _env_int("OCR_CERT_DPI", 110)
+    convert_kwargs = {}
+    if poppler_path:
+        convert_kwargs["poppler_path"] = poppler_path
+
+    try:
+        images = convert_from_path(
+            pdf_path,
+            dpi=ocr_dpi,
+            first_page=first_page,
+            last_page=last_page,
+            grayscale=True,
+            thread_count=1,
+            fmt="jpeg",
+            **convert_kwargs,
+        )
+        return _ocr_images(images)
+    except Exception:
+        return ""
+
+
+def _ocr_images(images):
+    ocr_timeout_seconds = _env_int("OCR_TIMEOUT_SECONDS", 40)
+    text = ""
+    for image in images:
+        try:
+            text += pytesseract.image_to_string(
+                image,
+                config="--oem 1 --psm 6",
+                timeout=ocr_timeout_seconds,
+            )
+        except RuntimeError as exc:
+            # Keep processing remaining pages if one page exceeds OCR timeout.
+            if "timeout" in str(exc).lower():
+                continue
+            raise
+    return text
 
 
 def parse_date(date_string):
