@@ -1,6 +1,7 @@
 import hashlib
 import os
 import re
+import subprocess
 from datetime import datetime
 
 import pytesseract
@@ -51,17 +52,58 @@ def generate_file_hash(file):
     return hasher.hexdigest()
 
 
+def _env_int(name, default):
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def extract_text_from_pdf(pdf_path):
+    text = _extract_text_with_pdftotext(pdf_path)
+    if text:
+        return text
+
     poppler_path = os.getenv("POPPLER_PATH")
+    max_pages = _env_int("OCR_MAX_PAGES", 2)
+    dpi = _env_int("OCR_DPI", 120)
     convert_kwargs = {}
     if poppler_path:
         convert_kwargs["poppler_path"] = poppler_path
 
-    images = convert_from_path(pdf_path, **convert_kwargs)
+    images = convert_from_path(
+        pdf_path,
+        dpi=dpi,
+        first_page=1,
+        last_page=max_pages,
+        grayscale=True,
+        thread_count=1,
+        fmt="jpeg",
+        **convert_kwargs,
+    )
     text = ""
     for image in images:
-        text += pytesseract.image_to_string(image)
+        text += pytesseract.image_to_string(image, config="--oem 1 --psm 6", timeout=20)
     return text
+
+
+def _extract_text_with_pdftotext(pdf_path):
+    try:
+        result = subprocess.run(
+            ["pdftotext", "-layout", "-enc", "UTF-8", pdf_path, "-"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    output = (result.stdout or "").strip()
+    return output or None
 
 
 def parse_date(date_string):
