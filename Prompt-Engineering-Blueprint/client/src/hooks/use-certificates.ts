@@ -2,19 +2,35 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import type { CertificateResponse } from "@shared/schema";
 
+export type UiCertificate = CertificateResponse & {
+  fileUrl?: string;
+  createdAt?: Date | null;
+  rejectionReason?: string | null;
+};
+
 type DjangoReportData = {
   lab_name: string | null;
   labtype: string | null;
   certificate_no: string | null;
   ulr_number: string | null;
   status: string | null;
+  rejection_reason?: string | null;
   issue_date: string | null;
+  to_date: string | null;
   valid_till: string | null;
+  address: string | null;
+  file_url: string | null;
+  created_at?: string | null;
 };
 
 type DjangoEnvelope = {
   success: boolean;
   data: DjangoReportData;
+};
+
+type DjangoListEnvelope = {
+  success: boolean;
+  data: DjangoReportData[];
 };
 
 const DJANGO_API_BASE = (
@@ -43,7 +59,7 @@ function parseDate(value: string | null | undefined): Date | null {
 function normalizeToCertificate(
   payload: DjangoReportData,
   fallbackUlr?: string,
-): CertificateResponse {
+): UiCertificate {
   const ulr = payload.ulr_number || fallbackUlr || "";
   const dateIssued = parseDate(payload.issue_date) || new Date();
   const validTill = parseDate(payload.valid_till);
@@ -56,7 +72,7 @@ function normalizeToCertificate(
     labName: payload.lab_name || "Unknown Laboratory",
     labType: payload.labtype || "N/A",
     certificateNo: payload.certificate_no || "N/A",
-    address: "Address not found in registry",
+    address: payload.address || "Address not found in registry",
     dateIssued,
     validTill,
     status,
@@ -67,6 +83,9 @@ function normalizeToCertificate(
     testParameters: [],
     auditLogs: [],
     chromatograms: [],
+    fileUrl: payload.file_url || "",
+    createdAt: parseDate(payload.created_at || "") || null,
+    rejectionReason: payload.rejection_reason || null,
   };
 }
 
@@ -110,6 +129,19 @@ export function useCertificateByUlr(ulr: string) {
   });
 }
 
+export function useUploadedReports() {
+  return useQuery({
+    queryKey: ["django-uploaded-reports"],
+    queryFn: async () => {
+      const res = await fetch(djangoUrl("/api/reports/"));
+      if (!res.ok) throw new Error("Failed to fetch uploaded reports");
+      const body = (await res.json()) as DjangoListEnvelope;
+      return body.data.map((item) => normalizeToCertificate(item));
+    },
+    retry: false,
+  });
+}
+
 export function useVerifyCertificate() {
   const queryClient = useQueryClient();
 
@@ -131,6 +163,7 @@ export function useVerifyCertificate() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData([api.certificates.getByUlr.path, data.ulr], data);
+      queryClient.invalidateQueries({ queryKey: ["django-uploaded-reports"] });
     },
   });
 }

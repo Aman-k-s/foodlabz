@@ -1,24 +1,18 @@
 import { useRoute } from "wouter";
 import { useCertificateByUlr } from "@/hooks/use-certificates";
 import { Navbar } from "@/components/layout/Navbar";
-import { UlrDecoder } from "@/components/dashboard/UlrDecoder";
-import { ParameterTable } from "@/components/dashboard/ParameterTable";
-import { ChromatogramViewer } from "@/components/dashboard/ChromatogramViewer";
-import { AuditTimeline } from "@/components/dashboard/AuditTimeline";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { 
   Building2, MapPin, Calendar, CheckCircle2, XCircle, AlertTriangle, 
-  FileText, Activity, History, ShieldAlert, ShieldCheck
+  FileText, ShieldAlert, ExternalLink
 } from "lucide-react";
-import { useState } from "react";
 
 export default function VerificationDashboard() {
   const [, params] = useRoute("/dashboard/:ulr");
   const ulr = params?.ulr || "";
   
   const { data: cert, isLoading, isError } = useCertificateByUlr(ulr);
-  const [activeTab, setActiveTab] = useState<'params' | 'raw' | 'audit'>('params');
 
   if (isLoading) {
     return (
@@ -65,21 +59,24 @@ export default function VerificationDashboard() {
   const isNotFound = !cert;
   
   // Derive top-level status
-  const isFullyVerified = cert?.isVerified && cert?.signatureValid && cert?.scopeValid;
   const hasAnomalies = cert?.testParameters?.some(p => !p.isAccredited) || !cert?.scopeValid;
+  const isRejected = cert?.status === "REJECTED";
   const isCritical = isNotFound || !cert?.isVerified || !cert?.signatureValid;
   const isLicenseExpired = cert?.licenseExpiry ? new Date(cert.licenseExpiry) < new Date() : false;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-sky-100 via-cyan-50 to-emerald-100 flex flex-col relative overflow-hidden">
+      <div className="absolute top-[-12%] right-[-6%] w-[520px] h-[520px] bg-trust/20 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-[-12%] left-[-6%] w-[620px] h-[620px] bg-success/20 rounded-full blur-3xl"></div>
+      <div className="absolute top-[30%] left-[35%] w-[360px] h-[360px] bg-warning/20 rounded-full blur-3xl"></div>
       <Navbar />
       
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 py-8 relative z-10">
         {/* Top Status Banner */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`mb-8 p-4 rounded-xl shadow-sm border flex items-start sm:items-center gap-4 ${
+          className={`mb-8 p-4 rounded-xl shadow-sm border flex items-start sm:items-center gap-4 backdrop-blur-md ${
             isCritical || isLicenseExpired ? 'bg-critical/10 border-critical/30 text-critical' :
             hasAnomalies ? 'bg-warning/10 border-warning/30 text-warning' :
             'bg-success/10 border-success/30 text-success'
@@ -100,6 +97,7 @@ export default function VerificationDashboard() {
             </h2>
             <p className="text-sm opacity-90 mt-0.5">
               {isNotFound ? `The ULR ${ulr} does not match any authenticated record in the NABL registry. This report is considered invalid.` :
+               isRejected ? (cert?.rejectionReason || "This report was rejected due to validation mismatch.") :
                isLicenseExpired ? `The issuing laboratory's NABL license expired on ${cert?.licenseExpiry ? format(new Date(cert.licenseExpiry), "MMM do, yyyy") : 'N/A'}.` :
                isCritical ? 'The laboratory identity or digital signatures failed cryptographic validation. Do not accept this report.' :
                hasAnomalies ? 'Report is authentic, but contains parameters outside the approved accreditation scope. Manual review required.' :
@@ -112,8 +110,8 @@ export default function VerificationDashboard() {
           {/* Left Column: Context & Metadata */}
           <div className="lg:col-span-4 space-y-6">
             {/* Lab Context Card */}
-            <section className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-border bg-slate-50">
+            <section className="bg-white/60 rounded-2xl border border-white/70 shadow-2xl shadow-cyan-500/20 backdrop-blur-2xl overflow-hidden">
+              <div className="p-4 border-b border-border/60 bg-white/50">
                 <h3 className="font-semibold text-navy flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-trust" /> Issuing Laboratory
                 </h3>
@@ -127,37 +125,28 @@ export default function VerificationDashboard() {
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Registered Address</p>
                   <p className="text-navy text-sm leading-relaxed">{cert?.address || 'Address not found in registry'}</p>
                 </div>
+                {cert?.fileUrl && (
+                  <a
+                    href={cert.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-trust hover:text-navy transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open Uploaded Report
+                  </a>
+                )}
                 <div className="pt-4 border-t border-border">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date Issued</p>
                   <p className="text-navy font-mono text-sm">{cert?.dateIssued ? format(new Date(cert.dateIssued), "MMMM do, yyyy") : 'N/A'}</p>
                 </div>
               </div>
             </section>
-
-            {/* ULR Decoder Card */}
-            <section className="bg-white rounded-2xl border border-border shadow-sm p-5">
-              <UlrDecoder ulr={ulr} />
-            </section>
-            
-            {/* Status Summary Card */}
-            <section className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-               <div className="p-4 border-b border-border bg-slate-50">
-                <h3 className="font-semibold text-navy flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-trust" /> Verification Matrix
-                </h3>
-              </div>
-              <div className="p-5 space-y-3">
-                <StatusRow label="Report Authenticity" status={cert?.isVerified ? 'pass' : 'fail'} />
-                <StatusRow label="Digital Signatures" status={cert?.signatureValid ? 'pass' : 'fail'} />
-                <StatusRow label="Scope Validation" status={cert?.scopeValid ? 'pass' : 'warn'} />
-                <StatusRow label="Laboratory License" status={isLicenseExpired || isNotFound ? 'fail' : 'pass'} />
-              </div>
-            </section>
           </div>
 
           {/* Right Column: Deep Data */}
           <div className="lg:col-span-8">
-            <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden h-full flex flex-col p-8">
+            <div className="bg-white/60 rounded-2xl border border-white/70 shadow-2xl shadow-cyan-500/20 backdrop-blur-2xl overflow-hidden h-full flex flex-col p-8">
               <h3 className="text-xl font-bold text-navy mb-6 font-display">Certificate Verification Details</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -178,7 +167,7 @@ export default function VerificationDashboard() {
                 
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ULR Number</p>
-                  <p className="text-navy font-mono font-medium text-lg">{ulr}</p>
+                  <p className="text-navy font-mono font-medium text-lg">{cert?.ulr || ulr}</p>
                 </div>
                 
                 <div className="space-y-1">
@@ -189,6 +178,12 @@ export default function VerificationDashboard() {
                     </Badge>
                   </div>
                 </div>
+                {isRejected && (
+                  <div className="space-y-1 md:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rejection Reason</p>
+                    <p className="text-critical font-medium text-sm">{cert?.rejectionReason || "Validation failed."}</p>
+                  </div>
+                )}
                 
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Issue Date</p>
@@ -217,17 +212,6 @@ export default function VerificationDashboard() {
   );
 }
 
-function StatusRow({ label, status }: { label: string, status: 'pass' | 'fail' | 'warn' }) {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      {status === 'pass' && <Badge icon={<CheckCircle2 />} color="success">Verified</Badge>}
-      {status === 'warn' && <Badge icon={<AlertTriangle />} color="warning">Warning</Badge>}
-      {status === 'fail' && <Badge icon={<XCircle />} color="critical">Failed</Badge>}
-    </div>
-  );
-}
-
 function Badge({ children, icon, color }: { children: React.ReactNode, icon: React.ReactNode, color: 'success'|'warning'|'critical' }) {
   const colorMap = {
     success: 'text-success bg-success/10 border-success/20',
@@ -240,34 +224,5 @@ function Badge({ children, icon, color }: { children: React.ReactNode, icon: Rea
       <span className="w-3.5 h-3.5 flex items-center justify-center">{icon}</span>
       {children}
     </span>
-  );
-}
-
-function TabButton({ 
-  active, onClick, icon, label, count, hasWarning 
-}: { 
-  active: boolean, onClick: () => void, icon: React.ReactNode, label: string, count?: number, hasWarning?: boolean 
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm transition-all whitespace-nowrap
-        ${active 
-          ? 'border-trust text-navy bg-white rounded-t-lg' 
-          : 'border-transparent text-muted-foreground hover:text-navy hover:bg-slate-100 rounded-t-lg'}
-      `}
-    >
-      {icon}
-      {label}
-      {count !== undefined && (
-        <span className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-          hasWarning ? 'bg-warning text-white' : 
-          active ? 'bg-navy text-white' : 'bg-slate-200 text-slate-600'
-        }`}>
-          {count}
-        </span>
-      )}
-    </button>
   );
 }

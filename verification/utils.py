@@ -9,11 +9,35 @@ from .models import LabMaster, Report
 
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-CERT_PATTERN = re.compile(r"\b([A-Z]{2})[- ]?(\d{3,6})\b")
-ULR_LABEL_PATTERN = re.compile(r"\bULR(?:\s*NO\.?)?[:\s-]*([A-Z0-9-]{8,})\b")
+CERT_PATTERN = re.compile(r"\b(TC|CC|RC)\s*[- ]?\s*(\d{4,6})\b")
+CERT_LINE_PATTERN = re.compile(
+    r"^\s*(T\s*C|C\s*C|R\s*C)\s*[-\u2010\u2011\u2012\u2013\u2014]?\s*((?:\d\s*){4,6})\s*$"
+)
+ULR_LABEL_PATTERN = re.compile(
+    r"\bU\s*L\s*R(?:\s*(?:NO|NO\.|NUMBER))?[:\s\-]*([A-Z0-9\s\-/]{10,32})\b"
+)
+ULR_SEQUENCE_PATTERN = re.compile(
+    r"\b(?:TC|CC|RC)[\s\-]?\d{3,6}[\s\-]?\d{2}[0-9A-F][0-9A-F]{8}[FP]\b"
+)
 DATE_PATTERNS = [
-    re.compile(r"\b\d{2}/\d{2}/\d{4}\b"),
-    re.compile(r"\b\d{2}\s+[A-Z]{3}\s+\d{4}\b"),
+    re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),
+    re.compile(r"\b\d{1,2}\s+[A-Z]{3,9}\s+\d{2,4}\b"),
+]
+ISSUE_DATE_LABEL_PATTERNS = [
+    re.compile(r"\bDATE\s+OF\s+ISSUE\b"),
+    re.compile(r"\bISSUE\s+DATE\b"),
+    re.compile(r"\bDATE\s+ISSUED\b"),
+]
+TO_DATE_LABEL_PATTERNS = [
+    re.compile(r"\bVALID\s+TILL\b"),
+    re.compile(r"\bVALID\s+UPTO\b"),
+    re.compile(r"\bVALID\s+UP\s+TO\b"),
+    re.compile(r"\bTO\s+DATE\b"),
+    re.compile(r"\bEXPIRY\s+DATE\b"),
+]
+LAB_NAME_LABEL_PATTERNS = [
+    re.compile(r"\bLABORATORY\s+NAME\b"),
+    re.compile(r"\bNAME\s+OF\s+LABORATORY\b"),
 ]
 
 
@@ -39,7 +63,18 @@ def parse_date(date_string):
     if not date_string:
         return None
     value = str(date_string).strip().upper()
-    for fmt in ("%d/%m/%Y", "%d %b %Y"):
+    value = value.replace(".", "/")
+    value = re.sub(r"\s+", " ", value)
+    for fmt in (
+        "%d/%m/%Y",
+        "%d/%m/%y",
+        "%d-%m-%Y",
+        "%d-%m-%y",
+        "%d %b %Y",
+        "%d %b %y",
+        "%d %B %Y",
+        "%d %B %y",
+    ):
         try:
             return datetime.strptime(value, fmt).date()
         except (TypeError, ValueError):
@@ -47,33 +82,119 @@ def parse_date(date_string):
     return None
 
 
+def normalize_ulr(ulr):
+    if not ulr:
+        return None
+    normalized = re.sub(r"[^A-Z0-9]", "", str(ulr).upper())
+    if not normalized:
+        return None
+    return normalized
+
+
+def _extract_issue_date(clean_text):
+    for label_pattern in ISSUE_DATE_LABEL_PATTERNS:
+        label_match = label_pattern.search(clean_text)
+        if not label_match:
+            continue
+        start = label_match.end()
+        end = min(len(clean_text), label_match.end() + 60)
+        window = clean_text[start:end]
+        for date_pattern in DATE_PATTERNS:
+            date_match = date_pattern.search(window)
+            if date_match:
+                return date_match.group(0)
+
+    for date_pattern in DATE_PATTERNS:
+        date_match = date_pattern.search(clean_text)
+        if date_match:
+            return date_match.group(0)
+    return None
+
+
+def _extract_date_by_labels(clean_text, label_patterns):
+    for label_pattern in label_patterns:
+        label_match = label_pattern.search(clean_text)
+        if not label_match:
+            continue
+        start = label_match.end()
+        end = min(len(clean_text), label_match.end() + 60)
+        window = clean_text[start:end]
+        for date_pattern in DATE_PATTERNS:
+            date_match = date_pattern.search(window)
+            if date_match:
+                return date_match.group(0)
+    return None
+
+
+def _extract_lab_name(clean_text):
+    for label_pattern in LAB_NAME_LABEL_PATTERNS:
+        label_match = label_pattern.search(clean_text)
+        if not label_match:
+            continue
+        start = label_match.end()
+        end = min(len(clean_text), label_match.end() + 120)
+        window = clean_text[start:end]
+        window = window.lstrip(":- ").strip()
+        candidate = re.split(r"\b(?:ULR|CERTIFICATE|DATE|VALID)\b", window)[0].strip(" :,-")
+        if len(candidate) >= 5:
+            return candidate
+    return None
+
+
 def extract_fields(text):
-    clean_text = text.upper()
-    clean_text = clean_text.replace("–", "-").replace("—", "-")
-    clean_text = re.sub(r"\s*-\s*", "-", clean_text)
-    clean_text = re.sub(r"\s+", " ", clean_text)
+    raw_text = text.upper()
+    raw_text = raw_text.replace("URL", "ULR")
+    raw_text = raw_text.replace("\u2010", "-").replace("\u2011", "-")
+    raw_text = raw_text.replace("\u2012", "-").replace("\u2013", "-").replace("\u2014", "-")
+    raw_text = raw_text.replace("â€“", "-").replace("â€”", "-")
+    raw_text = raw_text.replace("Ã¢â‚¬â€œ", "-").replace("Ã¢â‚¬â€", "-")
 
     certificate_no = None
-    cert_match = CERT_PATTERN.search(clean_text)
-    if cert_match:
-        certificate_no = f"{cert_match.group(1)}-{cert_match.group(2)}"
+    # Certificate appears as a distinct label below the logo in most reports.
+    for line in raw_text.splitlines():
+        line_match = CERT_LINE_PATTERN.match(line.strip())
+        if not line_match:
+            continue
+        prefix = line_match.group(1).replace(" ", "")
+        digits = re.sub(r"\s+", "", line_match.group(2))
+        certificate_no = f"{prefix}-{digits}"
+        break
+
+    clean_text = re.sub(r"\s*-\s*", "-", raw_text)
+    clean_text = re.sub(r"\s+", " ", clean_text)
+    if not certificate_no:
+        cert_match = CERT_PATTERN.search(clean_text)
+        if cert_match:
+            certificate_no = f"{cert_match.group(1)}-{cert_match.group(2)}"
 
     ulr = None
     label_match = ULR_LABEL_PATTERN.search(clean_text)
     if label_match:
-        ulr = label_match.group(1).replace(" ", "")
-    elif certificate_no:
+        candidate = label_match.group(1)
+        sequence_match = ULR_SEQUENCE_PATTERN.search(candidate)
+        if sequence_match:
+            ulr = normalize_ulr(sequence_match.group(0))
+        else:
+            ulr = normalize_ulr(candidate)
+            if ulr and len(ulr) > 18:
+                ulr = ulr[:18]
+            if ulr and len(ulr) < 12:
+                ulr = None
+
+    if not ulr:
+        sequence_match = ULR_SEQUENCE_PATTERN.search(clean_text)
+        if sequence_match:
+            ulr = normalize_ulr(sequence_match.group(0))
+
+    if not ulr and certificate_no:
         cert_clean = certificate_no.replace("-", "")
         ulr_match = re.search(rf"\b{cert_clean}[A-Z0-9]{{8,}}\b", clean_text)
         if ulr_match:
-            ulr = ulr_match.group(0)
+            ulr = normalize_ulr(ulr_match.group(0))
 
-    issue_date = None
-    for pattern in DATE_PATTERNS:
-        date_match = pattern.search(clean_text)
-        if date_match:
-            issue_date = date_match.group(0)
-            break
+    issue_date = _extract_issue_date(clean_text)
+    to_date = _extract_date_by_labels(clean_text, TO_DATE_LABEL_PATTERNS)
+    lab_name = _extract_lab_name(clean_text)
 
     labtype = None
     if "TESTING" in clean_text:
@@ -93,18 +214,19 @@ def extract_fields(text):
         "certificate_no": certificate_no,
         "ulr": ulr,
         "issue_date": issue_date,
+        "to_date": to_date,
+        "lab_name": lab_name,
         "labtype": labtype,
     }
 
 
 def validate_report(data, report_id=None):
-    ulr = data.get("ulr")
+    ulr = normalize_ulr(data.get("ulr"))
     cert_no = data.get("certificate_no")
     labtype = data.get("labtype")
-    issue_date = parse_date(data.get("issue_date"))
 
     if not cert_no:
-        return None, "INVALID_CERTIFICATE"
+        return None, "REJECTED", "Certificate number not found in report."
 
     cert_qs = LabMaster.objects.filter(cert_no=cert_no)
     lab = None
@@ -114,24 +236,23 @@ def validate_report(data, report_id=None):
         lab = cert_qs.first()
 
     if not lab:
-        return None, "INVALID_CERTIFICATE"
+        return None, "REJECTED", "Incorrect certificate number."
 
-    if ulr:
-        duplicate_qs = Report.objects.filter(ulr_number=ulr)
-        if report_id:
-            duplicate_qs = duplicate_qs.exclude(id=report_id)
-        if duplicate_qs.exists():
-            return lab, "DUPLICATE_ULR"
+    if not ulr:
+        return lab, "REJECTED", "ULR number not found in report."
 
-    expiry_date = lab.extend_date or lab.to_date
-    if not expiry_date:
-        return lab, "INVALID_CERTIFICATE"
+    cert_clean = cert_no.replace("-", "")
+    lab_ulr = normalize_ulr(lab.ulr_number) if getattr(lab, "ulr_number", None) else None
+    if lab_ulr:
+        if ulr != lab_ulr:
+            return lab, "REJECTED", "Extracted ULR is different from the ULR mapped to this certificate in lab database."
+    elif not ulr.startswith(cert_clean):
+        return lab, "REJECTED", "Extracted ULR does not match this certificate number."
 
-    today = datetime.today().date()
-    if today > expiry_date:
-        return lab, "CERTIFICATE_EXPIRED"
+    duplicate_qs = Report.objects.filter(ulr_number__iexact=ulr)
+    if report_id:
+        duplicate_qs = duplicate_qs.exclude(id=report_id)
+    if duplicate_qs.exists():
+        return lab, "DUPLICATE_ULR", "ULR already exists in uploaded reports."
 
-    if issue_date and lab.issue_date and issue_date < lab.issue_date:
-        return lab, "INVALID_ISSUE_DATE"
-
-    return lab, "VALID"
+    return lab, "VALID", None

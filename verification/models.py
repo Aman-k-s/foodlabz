@@ -9,6 +9,7 @@ class Report(models.Model):
 
     validation_score = models.IntegerField(default=0)
     status = models.CharField(max_length=30, default="PENDING")
+    rejection_reason = models.CharField(max_length=255, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -20,6 +21,7 @@ class LabMaster(models.Model):
     lab_id = models.CharField(max_length=50, unique=True)
     laboratory_name = models.CharField(max_length=255)
     cert_no = models.CharField(max_length=100)
+    ulr_number = models.CharField(max_length=50, null=True, blank=True)
     labtype = models.CharField(max_length=100)
 
     issue_date = models.DateField(null=True, blank=True)
@@ -28,6 +30,7 @@ class LabMaster(models.Model):
 
     city = models.CharField(max_length=100, null=True, blank=True)
     state = models.CharField(max_length=100, null=True, blank=True)
+    prime_address = models.TextField(null=True, blank=True)
 
     class Meta:
         unique_together = ("cert_no", "labtype")

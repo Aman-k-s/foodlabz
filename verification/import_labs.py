@@ -3,6 +3,13 @@ from datetime import datetime
 from verification.models import LabMaster
 
 
+def get_first_present(row, keys):
+    for key in keys:
+        if key in row and pd.notna(row.get(key)):
+            return row.get(key)
+    return None
+
+
 def safe_parse_date(value):
     if pd.isna(value):
         return None
@@ -38,12 +45,22 @@ def import_labs_from_excel(path):
                 lab_id=str(row["LabId"]).strip(),
                 laboratory_name=str(row["LaboratoryName"]).strip(),
                 cert_no=cert_no,
+                ulr_number=(
+                    str(get_first_present(row, ["ULR", "ULR_Number", "ULRNo", "ULR NO", "Ulr"])).strip().upper()
+                    if get_first_present(row, ["ULR", "ULR_Number", "ULRNo", "ULR NO", "Ulr"]) is not None
+                    else None
+                ),
                 labtype=labtype,
                 issue_date=safe_parse_date(row.get("Issue_Date")),
                 to_date=safe_parse_date(row.get("ToDate")),
                 extend_date=safe_parse_date(row.get("ExtendDate")),
                 city=(str(row.get("City")).strip() if pd.notna(row.get("City")) else None),
                 state=(str(row.get("State")).strip() if pd.notna(row.get("State")) else None),
+                prime_address=(
+                    str(row.get("PrimeAddress")).strip()
+                    if pd.notna(row.get("PrimeAddress"))
+                    else None
+                ),
             )
         )
 
