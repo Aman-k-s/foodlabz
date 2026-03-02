@@ -15,4 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000}"
+CMD sh -c "python manage.py migrate && \
+if [ \"${RUN_LAB_IMPORT}\" = \"true\" ]; then \
+  python manage.py shell -c \"from verification.import_labs import import_labs_from_excel; import_labs_from_excel('File.xlsx')\"; \
+fi && \
+gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000}"
