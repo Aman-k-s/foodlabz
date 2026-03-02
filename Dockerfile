@@ -16,7 +16,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 CMD sh -c "python manage.py migrate && \
-if [ \"${RUN_LAB_IMPORT}\" = \"true\" ]; then \
-  python manage.py shell -c \"from verification.import_labs import import_labs_from_excel; import_labs_from_excel('File.xlsx')\"; \
-fi && \
+echo \"RUN_LAB_IMPORT=${RUN_LAB_IMPORT}\" && \
+case \"${RUN_LAB_IMPORT}\" in \
+  true|TRUE|True|1) \
+    echo 'Starting one-time lab import from File.xlsx' && \
+    python manage.py shell -c \"from verification.import_labs import import_labs_from_excel; import_labs_from_excel('File.xlsx')\" ;; \
+  *) \
+    echo 'Skipping lab import' ;; \
+esac && \
 gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000}"
