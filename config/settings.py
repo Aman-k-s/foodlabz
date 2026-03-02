@@ -111,6 +111,14 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-CORS_ALLOW_ALL_ORIGINS = not CORS_ALLOWED_ORIGINS
+
+cors_allow_all_env = os.getenv("CORS_ALLOW_ALL_ORIGINS")
+if cors_allow_all_env is not None:
+    CORS_ALLOW_ALL_ORIGINS = cors_allow_all_env.strip().lower() in {"1", "true", "yes", "on"}
+else:
+    CORS_ALLOW_ALL_ORIGINS = not CORS_ALLOWED_ORIGINS
+
+# Supports Vercel preview/prod domains without reconfiguring every preview URL.
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://.*\.vercel\.app$"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
