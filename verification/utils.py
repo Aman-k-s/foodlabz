@@ -97,46 +97,7 @@ def extract_text_from_pdf(pdf_path):
         return text
     if page1_ocr_text:
         return page1_ocr_text
-
-    allow_heavy_fallback = os.getenv("ENABLE_HEAVY_OCR_FALLBACK", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    if not allow_heavy_fallback:
-        return ""
-
-    remaining = _remaining_seconds(deadline)
-    if not remaining or remaining <= 3:
-        return ""
-
-    poppler_path = os.getenv("POPPLER_PATH")
-    max_pages = _env_int_clamped("OCR_MAX_PAGES", 2, 1, 3)
-    dpi = _env_int_clamped("OCR_DPI", 100, 70, 130)
-    convert_timeout_seconds = min(_env_int_clamped("OCR_CONVERT_TIMEOUT_SECONDS", 10, 4, 15), remaining)
-
-    convert_kwargs = {}
-    if poppler_path:
-        convert_kwargs["poppler_path"] = poppler_path
-
-    try:
-        images = convert_from_path(
-            pdf_path,
-            dpi=dpi,
-            first_page=1,
-            last_page=max_pages,
-            grayscale=True,
-            thread_count=1,
-            fmt="jpeg",
-            timeout=convert_timeout_seconds,
-            **convert_kwargs,
-        )
-    except Exception:
-        return ""
-
-    text = _ocr_images(images, max_timeout_seconds=_remaining_seconds(deadline))
-    return text
+    return ""
 
 
 def _extract_text_with_pdftotext(pdf_path, timeout_seconds=20):
@@ -398,6 +359,14 @@ def extract_fields(text):
         ulr_match = re.search(rf"\b{cert_clean}[A-Z0-9]{{8,}}\b", clean_text)
         if ulr_match:
             ulr = normalize_ulr(ulr_match.group(0))
+
+    if not certificate_no and ulr:
+        cert_from_ulr = re.match(r"^(TC|7C|CC|RC)(\d{4,6})", ulr)
+        if cert_from_ulr:
+            prefix = cert_from_ulr.group(1)
+            if prefix == "7C":
+                prefix = "TC"
+            certificate_no = f"{prefix}-{cert_from_ulr.group(2)}"
 
     issue_date = _extract_issue_date(clean_text)
     to_date = _extract_date_by_labels(clean_text, TO_DATE_LABEL_PATTERNS)
