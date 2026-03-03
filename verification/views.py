@@ -14,6 +14,22 @@ from .utils import (
 )
 
 
+def _trim_reason(message):
+    text = (message or "Failed to process document.").strip()
+    return text[:250]
+
+
+def _reject_report(report, reason):
+    report.status = "REJECTED"
+    report.validation_score = 0
+    report.rejection_reason = _trim_reason(reason)
+    try:
+        report.save(update_fields=["status", "validation_score", "rejection_reason"])
+    except Exception:
+        # Never re-raise from rejection path; we still want API response.
+        pass
+
+
 def _lab_address(lab):
     if not lab:
         return None
@@ -67,24 +83,25 @@ def _extract_text_from_uploaded_pdf(file_obj):
 
 class UploadReportView(APIView):
     def post(self, request):
-        file = request.FILES.get("file")
-        if not file:
-            return Response({"error": "No file uploaded"}, status=400)
-        if not str(file.name).lower().endswith(".pdf"):
-            return Response({"error": "Only PDF reports are supported for upload."}, status=400)
-
-        file_hash = generate_file_hash(file)
-        report = Report.objects.filter(file_hash=file_hash).first()
-        if not report:
-            report = Report(file_hash=file_hash)
-
-        # Always refresh stored file and re-run extraction on the current upload.
-        report.file = file
-        report.status = "PENDING"
-        report.rejection_reason = None
-        report.save()
-
+        report = None
         try:
+            file = request.FILES.get("file")
+            if not file:
+                return Response({"error": "No file uploaded"}, status=400)
+            if not str(file.name).lower().endswith(".pdf"):
+                return Response({"error": "Only PDF reports are supported for upload."}, status=400)
+
+            file_hash = generate_file_hash(file)
+            report = Report.objects.filter(file_hash=file_hash).first()
+            if not report:
+                report = Report(file_hash=file_hash)
+
+            # Always refresh stored file and re-run extraction on the current upload.
+            report.file = file
+            report.status = "PENDING"
+            report.rejection_reason = None
+            report.save()
+
             text = _extract_text_from_uploaded_pdf(file)
             extracted = extract_fields(text)
 
@@ -113,10 +130,10 @@ class UploadReportView(APIView):
                 }
             )
         except Exception as e:
-            report.status = "REJECTED"
-            report.validation_score = 0
-            report.rejection_reason = str(e) or "Failed to process document."
-            report.save(update_fields=["status", "validation_score", "rejection_reason"])
+            if not report:
+                return Response({"error": _trim_reason(str(e))}, status=500)
+
+            _reject_report(report, str(e))
             return Response(
                 {
                     "success": True,
