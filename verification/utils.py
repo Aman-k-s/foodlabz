@@ -13,9 +13,9 @@ _tesseract_cmd = os.getenv("TESSERACT_CMD")
 if _tesseract_cmd:
     pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
 
-CERT_PATTERN = re.compile(r"\b(TC|CC|RC)\s*[-~ ]?\s*(\d{4,6})\b")
+CERT_PATTERN = re.compile(r"\b(TC|CC|RC)\s*[- ]?\s*(\d{4,6})\b")
 CERT_LINE_PATTERN = re.compile(
-    r"^\s*(T\s*C|C\s*C|R\s*C)\s*[-~\u2010\u2011\u2012\u2013\u2014]?\s*((?:\d\s*){4,6})\s*$"
+    r"^\s*(T\s*C|C\s*C|R\s*C)\s*[-\u2010\u2011\u2012\u2013\u2014]?\s*((?:\d\s*){4,6})\s*$"
 )
 ULR_LABEL_PATTERN = re.compile(
     r"\bU\s*L\s*R(?:\s*(?:NO|NO\.|NUMBER))?[:\s\-]*([A-Z0-9\s\-/]{10,32})\b"

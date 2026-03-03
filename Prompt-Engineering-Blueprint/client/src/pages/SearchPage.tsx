@@ -10,11 +10,13 @@ export default function SearchPage() {
   const verifyMutation = useVerifyCertificate();
   const uploadMutation = useUploadCertificate();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setUploadedFileUrl(null);
 
     const normalized = ulr.replace(/\s+/g, "").toUpperCase();
     if (normalized.length !== 18) {
@@ -37,9 +39,22 @@ export default function SearchPage() {
     if (!file) return;
 
     setErrorMsg(null);
+    setUploadedFileUrl(null);
     uploadMutation.mutate(file, {
       onSuccess: (data) => {
-        setLocation(`/dashboard/${data.ulr}`);
+        const normalizedUlr = (data.ulr || "").trim();
+        if (normalizedUlr) {
+          setLocation(`/dashboard/${encodeURIComponent(normalizedUlr)}`);
+          return;
+        }
+
+        if (data.fileUrl) {
+          setUploadedFileUrl(data.fileUrl);
+        }
+        setErrorMsg(
+          data.rejectionReason ||
+            "Upload completed, but ULR/certificate number could not be extracted from this report.",
+        );
       },
       onError: (err: any) => {
         setErrorMsg(err?.message || "Failed to process document. Please try manual entry.");
@@ -177,6 +192,17 @@ export default function SearchPage() {
                 </>
               )}
             </button>
+            {uploadedFileUrl && (
+              <a
+                href={uploadedFileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-trust hover:text-navy transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                Open Uploaded File
+              </a>
+            )}
           </div>
 
           <div className="mt-8 pt-6 border-t border-border flex items-center justify-center gap-6 text-xs text-muted-foreground font-medium">

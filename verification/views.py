@@ -1,6 +1,9 @@
 import os
 import tempfile
+from pathlib import Path
 
+from django.conf import settings
+from django.http import FileResponse, Http404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -43,9 +46,9 @@ def _report_file_url(request, report):
     if not report or not report.file:
         return None
     try:
-        return request.build_absolute_uri(report.file.url)
+        return request.build_absolute_uri(f"/api/media/{report.file.name}")
     except Exception:
-        return report.file.url
+        return f"/api/media/{report.file.name}"
 
 
 def _serialize_report(request, report, lab, extracted_issue_date=None, extracted_to_date=None):
@@ -174,3 +177,14 @@ class UploadedReportsView(APIView):
                 lab = LabMaster.objects.filter(cert_no=report.accreditation_no).first()
             data.append(_serialize_report(request=request, report=report, lab=lab))
         return Response({"success": True, "data": data})
+
+
+class ReportMediaView(APIView):
+    def get(self, request, file_path):
+        media_root = Path(settings.MEDIA_ROOT).resolve()
+        requested = (media_root / file_path).resolve()
+        if media_root not in requested.parents and requested != media_root:
+            raise Http404("File not found")
+        if not requested.exists() or not requested.is_file():
+            raise Http404("File not found")
+        return FileResponse(requested.open("rb"), as_attachment=False, filename=requested.name)

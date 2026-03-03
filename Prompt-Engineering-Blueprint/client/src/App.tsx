@@ -12,6 +12,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={SearchPage} />
+      <Route path="/dashboard" component={SearchPage} />
+      <Route path="/dashboard/" component={SearchPage} />
       <Route path="/dashboard/:ulr" component={VerificationDashboard} />
       <Route component={NotFound} />
     </Switch>
