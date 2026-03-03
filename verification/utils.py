@@ -79,11 +79,6 @@ def extract_text_from_pdf(pdf_path):
     max_pages = _env_int("OCR_MAX_PAGES", 2)
     dpi = _env_int("OCR_DPI", 120)
     convert_timeout_seconds = _env_int("OCR_CONVERT_TIMEOUT_SECONDS", 20)
-    if max_pages <= 1:
-        raise RuntimeError(
-            "Unable to extract readable text from first page within OCR limits. "
-            "Try a clearer PDF or increase OCR_MAX_PAGES."
-        )
 
     convert_kwargs = {}
     if poppler_path:
@@ -101,11 +96,6 @@ def extract_text_from_pdf(pdf_path):
         **convert_kwargs,
     )
     text = _ocr_images(images)
-    if not text.strip():
-        raise RuntimeError(
-            "OCR could not extract readable text within timeout. "
-            "Try a clearer/smaller PDF or increase OCR_TIMEOUT_SECONDS."
-        )
     return text
 
 
@@ -379,3 +369,4 @@ def validate_report(data, report_id=None):
         return lab, "DUPLICATE_ULR", "ULR already exists in uploaded reports."
 
     return lab, "VALID", None
+
