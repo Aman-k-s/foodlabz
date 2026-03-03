@@ -2,6 +2,7 @@ import hashlib
 import os
 import re
 import subprocess
+import time
 from datetime import datetime
 
 import pytesseract
@@ -59,14 +60,36 @@ def _env_int(name, default):
         return default
 
 
+def _env_int_clamped(name, default, minimum, maximum):
+    value = _env_int(name, default)
+    return max(minimum, min(value, maximum))
+
+
+def _remaining_seconds(deadline):
+    if deadline is None:
+        return None
+    return max(1, int(deadline - time.monotonic()))
+
+
 def extract_text_from_pdf(pdf_path):
-    text = _extract_text_with_pdftotext(pdf_path) or ""
+    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 55, 20, 90)
+    deadline = time.monotonic() + total_timeout_seconds
+
+    pdftotext_timeout = min(_env_int_clamped("PDFTOTEXT_TIMEOUT_SECONDS", 10, 4, 15), _remaining_seconds(deadline))
+    text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
 
     # Certificate number is often printed as an image label below the NABL logo.
     # Keep OCR on page 1 as a light supplement even when pdftotext succeeds.
     page1_ocr_text = ""
     if not _contains_certificate_number(text):
-        page1_ocr_text = _extract_page_ocr_text(pdf_path, first_page=1, last_page=1)
+        remaining = _remaining_seconds(deadline)
+        if remaining and remaining > 3:
+            page1_ocr_text = _extract_page_ocr_text(
+                pdf_path,
+                first_page=1,
+                last_page=1,
+                max_timeout_seconds=remaining,
+            )
 
     if text and page1_ocr_text:
         return f"{text}\n{page1_ocr_text}"
@@ -75,38 +98,55 @@ def extract_text_from_pdf(pdf_path):
     if page1_ocr_text:
         return page1_ocr_text
 
+    allow_heavy_fallback = os.getenv("ENABLE_HEAVY_OCR_FALLBACK", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not allow_heavy_fallback:
+        return ""
+
+    remaining = _remaining_seconds(deadline)
+    if not remaining or remaining <= 3:
+        return ""
+
     poppler_path = os.getenv("POPPLER_PATH")
-    max_pages = _env_int("OCR_MAX_PAGES", 2)
-    dpi = _env_int("OCR_DPI", 120)
-    convert_timeout_seconds = _env_int("OCR_CONVERT_TIMEOUT_SECONDS", 20)
+    max_pages = _env_int_clamped("OCR_MAX_PAGES", 2, 1, 3)
+    dpi = _env_int_clamped("OCR_DPI", 100, 70, 130)
+    convert_timeout_seconds = min(_env_int_clamped("OCR_CONVERT_TIMEOUT_SECONDS", 10, 4, 15), remaining)
 
     convert_kwargs = {}
     if poppler_path:
         convert_kwargs["poppler_path"] = poppler_path
 
-    images = convert_from_path(
-        pdf_path,
-        dpi=dpi,
-        first_page=1,
-        last_page=max_pages,
-        grayscale=True,
-        thread_count=1,
-        fmt="jpeg",
-        timeout=convert_timeout_seconds,
-        **convert_kwargs,
-    )
-    text = _ocr_images(images)
+    try:
+        images = convert_from_path(
+            pdf_path,
+            dpi=dpi,
+            first_page=1,
+            last_page=max_pages,
+            grayscale=True,
+            thread_count=1,
+            fmt="jpeg",
+            timeout=convert_timeout_seconds,
+            **convert_kwargs,
+        )
+    except Exception:
+        return ""
+
+    text = _ocr_images(images, max_timeout_seconds=_remaining_seconds(deadline))
     return text
 
 
-def _extract_text_with_pdftotext(pdf_path):
+def _extract_text_with_pdftotext(pdf_path, timeout_seconds=20):
     try:
         result = subprocess.run(
             ["pdftotext", "-layout", "-enc", "UTF-8", pdf_path, "-"],
             check=False,
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=timeout_seconds,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
         return None
@@ -118,10 +158,14 @@ def _extract_text_with_pdftotext(pdf_path):
     return output or None
 
 
-def _extract_page_ocr_text(pdf_path, first_page, last_page):
+def _extract_page_ocr_text(pdf_path, first_page, last_page, max_timeout_seconds=None):
     poppler_path = os.getenv("POPPLER_PATH")
-    ocr_dpi = _env_int("OCR_CERT_DPI", 110)
-    convert_timeout_seconds = _env_int("OCR_CONVERT_TIMEOUT_SECONDS", 20)
+    ocr_dpi = _env_int_clamped("OCR_CERT_DPI", 110, 80, 150)
+    convert_timeout_seconds = _env_int_clamped("OCR_CONVERT_TIMEOUT_SECONDS", 10, 4, 15)
+    if max_timeout_seconds is not None:
+        if max_timeout_seconds <= 3:
+            return ""
+        convert_timeout_seconds = min(convert_timeout_seconds, max_timeout_seconds)
     convert_kwargs = {}
     if poppler_path:
         convert_kwargs["poppler_path"] = poppler_path
@@ -138,20 +182,35 @@ def _extract_page_ocr_text(pdf_path, first_page, last_page):
             timeout=convert_timeout_seconds,
             **convert_kwargs,
         )
-        return _ocr_images(images)
+        full_text = _ocr_images(images, max_timeout_seconds=max_timeout_seconds)
+        cert_hint = _extract_certificate_hint(images[0], max_timeout_seconds=max_timeout_seconds)
+        if cert_hint and cert_hint not in full_text:
+            if full_text:
+                return f"{full_text}\n{cert_hint}"
+            return cert_hint
+        return full_text
     except Exception:
         return ""
 
 
-def _ocr_images(images):
-    ocr_timeout_seconds = _env_int("OCR_TIMEOUT_SECONDS", 20)
+def _ocr_images(images, max_timeout_seconds=None):
+    ocr_timeout_seconds = _env_int_clamped("OCR_TIMEOUT_SECONDS", 8, 3, 12)
+    deadline = None
+    if max_timeout_seconds is not None:
+        deadline = time.monotonic() + max_timeout_seconds
     text = ""
     for image in images:
+        per_page_timeout = ocr_timeout_seconds
+        if deadline is not None:
+            remaining = int(deadline - time.monotonic())
+            if remaining <= 1:
+                break
+            per_page_timeout = min(per_page_timeout, remaining)
         try:
             text += pytesseract.image_to_string(
                 image,
                 config="--oem 1 --psm 6",
-                timeout=ocr_timeout_seconds,
+                timeout=per_page_timeout,
             )
         except RuntimeError as exc:
             # Keep processing remaining pages if one page exceeds OCR timeout.
@@ -159,6 +218,41 @@ def _ocr_images(images):
                 continue
             raise
     return text
+
+
+def _extract_certificate_hint(image, max_timeout_seconds=None):
+    width, height = image.size
+    crop = image.crop((int(width * 0.2), int(height * 0.2), int(width * 0.8), int(height * 0.75)))
+    cert_timeout = _env_int_clamped("OCR_CERT_TIMEOUT_SECONDS", 5, 2, 8)
+    if max_timeout_seconds is not None:
+        cert_timeout = min(cert_timeout, max_timeout_seconds)
+    if cert_timeout <= 1:
+        return ""
+
+    configs = [
+        "--oem 1 --psm 6 -c tessedit_char_whitelist=TCRC-0123456789",
+        "--oem 1 --psm 11 -c tessedit_char_whitelist=TCRC-0123456789",
+    ]
+    for config in configs:
+        try:
+            text = pytesseract.image_to_string(crop, config=config, timeout=cert_timeout).upper()
+        except RuntimeError:
+            continue
+        normalized = re.sub(r"\s+", "", text)
+        match = re.search(r"\b(TC|CC|RC)[- ]?\d{4,6}\b", text)
+        if match:
+            prefix = match.group(1).replace(" ", "")
+            digits = re.sub(r"\D", "", match.group(0))
+            if len(digits) >= 4:
+                return f"{prefix}-{digits[-6:] if len(digits) > 6 else digits}"
+        alt = re.search(r"(TC|CC|RC)-?\d{4,6}", normalized)
+        if alt:
+            token = alt.group(0).replace(" ", "")
+            token = token.replace("--", "-")
+            if "-" not in token:
+                token = f"{token[:2]}-{token[2:]}"
+            return token
+    return ""
 
 
 def _contains_certificate_number(text):
