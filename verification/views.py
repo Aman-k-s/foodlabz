@@ -113,7 +113,16 @@ class UploadReportView(APIView):
                 }
             )
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            report.status = "REJECTED"
+            report.validation_score = 0
+            report.rejection_reason = str(e) or "Failed to process document."
+            report.save(update_fields=["status", "validation_score", "rejection_reason"])
+            return Response(
+                {
+                    "success": True,
+                    "data": _serialize_report(request=request, report=report, lab=None),
+                }
+            )
 
 
 class ReportByUlrView(APIView):
