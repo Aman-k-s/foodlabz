@@ -141,7 +141,7 @@ def _extract_page_ocr_text(pdf_path, first_page, last_page):
 
 
 def _ocr_images(images):
-    ocr_timeout_seconds = _env_int("OCR_TIMEOUT_SECONDS", 40)
+    ocr_timeout_seconds = _env_int("OCR_TIMEOUT_SECONDS", 20)
     text = ""
     for image in images:
         try:

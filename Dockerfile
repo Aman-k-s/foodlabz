@@ -24,4 +24,7 @@ case \"${RUN_LAB_IMPORT}\" in \
   *) \
     echo 'Skipping lab import' ;; \
 esac && \
-gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000}"
+gunicorn config.wsgi:application \
+  --bind 0.0.0.0:${PORT:-10000} \
+  --timeout ${GUNICORN_TIMEOUT:-120} \
+  --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30}"
