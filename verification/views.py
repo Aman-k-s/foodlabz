@@ -7,10 +7,11 @@ from django.http import FileResponse, Http404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import LabMaster, Report
+from .models import Report
 from .utils import (
     extract_fields,
     extract_text_from_pdf,
+    find_lab_match,
     generate_file_hash,
     normalize_ulr,
     validate_report,
@@ -118,6 +119,8 @@ class UploadReportView(APIView):
 
             if lab:
                 report.lab_name = lab.laboratory_name
+                if not report.accreditation_no:
+                    report.accreditation_no = lab.cert_no
             report.save()
 
             return Response(
@@ -156,8 +159,7 @@ class ReportByUlrView(APIView):
             return Response({"message": "ULR number does not exist in lab database."}, status=404)
 
         lab = None
-        if report.accreditation_no:
-            lab = LabMaster.objects.filter(cert_no=report.accreditation_no).first()
+        lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
 
         return Response(
             {
@@ -172,9 +174,7 @@ class UploadedReportsView(APIView):
         reports = Report.objects.order_by("-created_at")[:100]
         data = []
         for report in reports:
-            lab = None
-            if report.accreditation_no:
-                lab = LabMaster.objects.filter(cert_no=report.accreditation_no).first()
+            lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
             data.append(_serialize_report(request=request, report=report, lab=lab))
         return Response({"success": True, "data": data})
 
