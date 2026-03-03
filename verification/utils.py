@@ -64,7 +64,10 @@ def extract_text_from_pdf(pdf_path):
 
     # Certificate number is often printed as an image label below the NABL logo.
     # Keep OCR on page 1 as a light supplement even when pdftotext succeeds.
-    page1_ocr_text = _extract_page_ocr_text(pdf_path, first_page=1, last_page=1)
+    page1_ocr_text = ""
+    if not _contains_certificate_number(text):
+        page1_ocr_text = _extract_page_ocr_text(pdf_path, first_page=1, last_page=1)
+
     if text and page1_ocr_text:
         return f"{text}\n{page1_ocr_text}"
     if text:
@@ -75,6 +78,13 @@ def extract_text_from_pdf(pdf_path):
     poppler_path = os.getenv("POPPLER_PATH")
     max_pages = _env_int("OCR_MAX_PAGES", 2)
     dpi = _env_int("OCR_DPI", 120)
+    convert_timeout_seconds = _env_int("OCR_CONVERT_TIMEOUT_SECONDS", 20)
+    if max_pages <= 1:
+        raise RuntimeError(
+            "Unable to extract readable text from first page within OCR limits. "
+            "Try a clearer PDF or increase OCR_MAX_PAGES."
+        )
+
     convert_kwargs = {}
     if poppler_path:
         convert_kwargs["poppler_path"] = poppler_path
@@ -87,6 +97,7 @@ def extract_text_from_pdf(pdf_path):
         grayscale=True,
         thread_count=1,
         fmt="jpeg",
+        timeout=convert_timeout_seconds,
         **convert_kwargs,
     )
     text = _ocr_images(images)
@@ -120,6 +131,7 @@ def _extract_text_with_pdftotext(pdf_path):
 def _extract_page_ocr_text(pdf_path, first_page, last_page):
     poppler_path = os.getenv("POPPLER_PATH")
     ocr_dpi = _env_int("OCR_CERT_DPI", 110)
+    convert_timeout_seconds = _env_int("OCR_CONVERT_TIMEOUT_SECONDS", 20)
     convert_kwargs = {}
     if poppler_path:
         convert_kwargs["poppler_path"] = poppler_path
@@ -133,6 +145,7 @@ def _extract_page_ocr_text(pdf_path, first_page, last_page):
             grayscale=True,
             thread_count=1,
             fmt="jpeg",
+            timeout=convert_timeout_seconds,
             **convert_kwargs,
         )
         return _ocr_images(images)
@@ -156,6 +169,17 @@ def _ocr_images(images):
                 continue
             raise
     return text
+
+
+def _contains_certificate_number(text):
+    if not text:
+        return False
+    raw_text = text.upper()
+    for line in raw_text.splitlines():
+        if CERT_LINE_PATTERN.match(line.strip()):
+            return True
+    normalized = re.sub(r"\s+", " ", raw_text)
+    return bool(CERT_PATTERN.search(normalized))
 
 
 def parse_date(date_string):

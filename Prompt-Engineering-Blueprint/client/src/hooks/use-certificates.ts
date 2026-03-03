@@ -187,7 +187,21 @@ export function useUploadCertificate() {
           const errorData = await res.json();
           message = errorData.error || errorData.message || message;
         } catch {
-          // Fall through with default message.
+          try {
+            const text = await res.text();
+            if (text) {
+              message = text.slice(0, 180);
+            }
+          } catch {
+            // Fall through with default message.
+          }
+        }
+        if (message === "Upload failed") {
+          if (res.status === 502 || res.status === 504) {
+            message = "Upload timed out at server. Try a smaller/clearer PDF.";
+          } else {
+            message = `Upload failed (${res.status})`;
+          }
         }
         throw new Error(message);
       }
