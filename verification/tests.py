@@ -147,7 +147,7 @@ class ValidationTests(TestCase):
         self.assertEqual(status, "VALID")
         self.assertIsNone(reason)
 
-    def test_rejects_when_ulr_mismatch(self):
+    def test_ulr_mismatch_does_not_reject_in_certificate_first_mode(self):
         lab, status, reason = validate_report(
             {
                 "certificate_no": "TC-6467",
@@ -158,5 +158,5 @@ class ValidationTests(TestCase):
             }
         )
         self.assertEqual(lab, self.lab)
-        self.assertEqual(status, "REJECTED")
-        self.assertIn("different", reason.lower())
+        self.assertEqual(status, "VALID")
+        self.assertIsNone(reason)

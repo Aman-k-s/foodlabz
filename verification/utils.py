@@ -272,6 +272,26 @@ def _lab_matches_cert(lab, cert_no):
     return normalize_cert_no(lab.cert_no) == normalize_cert_no(cert_no)
 
 
+def _candidate_certs_from_extracted(cert_no):
+    normalized = normalize_cert_no(cert_no)
+    if not normalized:
+        return []
+
+    match = re.match(r"^(TC|CC|RC)(\d+)$", normalized)
+    if not match:
+        return [normalized]
+
+    prefix, digits = match.groups()
+    candidates = []
+
+    # Try exact OCR first, then progressively trim trailing digits down to 4.
+    for length in range(len(digits), 3, -1):
+        candidate = f"{prefix}-{digits[:length]}"
+        if candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
+
 def _find_lab_by_ulr(ulr, labtype=None):
     normalized_ulr = normalize_ulr(ulr)
     if not normalized_ulr:
@@ -300,23 +320,28 @@ def _possible_certs_from_ulr(ulr):
 
 
 def _find_lab_by_cert(cert_no, labtype=None):
-    normalized_cert = normalize_cert_no(cert_no)
-    if not normalized_cert:
+    cert_candidates = _candidate_certs_from_extracted(cert_no)
+    if not cert_candidates:
         return None
 
-    prefix_match = re.match(r"^(TC|CC|RC)", normalized_cert)
-    qs = LabMaster.objects.all()
+    first_candidate = cert_candidates[0]
+    prefix_match = re.match(r"^(TC|CC|RC)", normalize_cert_no(first_candidate))
+    base_qs = LabMaster.objects.all()
     if prefix_match:
-        qs = qs.filter(cert_no__istartswith=prefix_match.group(1))
+        base_qs = base_qs.filter(cert_no__istartswith=prefix_match.group(1))
 
     if labtype:
-        preferred = [lab for lab in qs.filter(labtype__iexact=labtype) if _lab_matches_cert(lab, normalized_cert)]
-        if preferred:
-            return preferred[0]
+        labs = list(base_qs.filter(labtype__iexact=labtype))
+        for candidate in cert_candidates:
+            preferred = [lab for lab in labs if _lab_matches_cert(lab, candidate)]
+            if preferred:
+                return preferred[0]
 
-    matched = [lab for lab in qs if _lab_matches_cert(lab, normalized_cert)]
-    if matched:
-        return matched[0]
+    all_labs = list(base_qs)
+    for candidate in cert_candidates:
+        matched = [lab for lab in all_labs if _lab_matches_cert(lab, candidate)]
+        if matched:
+            return matched[0]
     return None
 
 
@@ -324,15 +349,6 @@ def find_lab_match(cert_no=None, ulr=None, labtype=None):
     lab_by_cert = _find_lab_by_cert(cert_no, labtype=labtype) if cert_no else None
     if lab_by_cert:
         return lab_by_cert, "cert"
-
-    lab_by_ulr = _find_lab_by_ulr(ulr, labtype=labtype) if ulr else None
-    if lab_by_ulr:
-        return lab_by_ulr, "ulr"
-
-    for candidate_cert in _possible_certs_from_ulr(ulr):
-        lab = _find_lab_by_cert(candidate_cert, labtype=labtype)
-        if lab:
-            return lab, "ulr-cert-candidate"
 
     return None, None
 
@@ -438,14 +454,6 @@ def extract_fields(text):
         if ulr_match:
             ulr = normalize_ulr(ulr_match.group(0))
 
-    if not certificate_no and ulr:
-        cert_from_ulr = re.match(r"^(TC|7C|CC|RC)(\d{4,6})", ulr)
-        if cert_from_ulr:
-            prefix = cert_from_ulr.group(1)
-            if prefix == "7C":
-                prefix = "TC"
-            certificate_no = f"{prefix}-{cert_from_ulr.group(2)}"
-
     issue_date = _extract_issue_date(clean_text)
     to_date = _extract_date_by_labels(clean_text, TO_DATE_LABEL_PATTERNS)
     lab_name = _extract_lab_name(clean_text)
@@ -478,36 +486,21 @@ def validate_report(data, report_id=None):
     ulr = normalize_ulr(data.get("ulr"))
     cert_no = data.get("certificate_no")
     labtype = data.get("labtype")
-    lab, match_source = find_lab_match(cert_no=cert_no, ulr=ulr, labtype=labtype)
+    lab = _find_lab_by_cert(cert_no, labtype=labtype) if cert_no else None
+
+    if not lab and ulr:
+        # Recovery path: derive possible certificate numbers from ULR prefix,
+        # then validate against certificate records in Excel DB.
+        for candidate_cert in _possible_certs_from_ulr(ulr):
+            lab = _find_lab_by_cert(candidate_cert, labtype=labtype)
+            if lab:
+                break
 
     if not cert_no and not lab:
         return None, "REJECTED", "Certificate number not found in report."
 
     if not lab:
         return None, "REJECTED", "Incorrect certificate number."
-
-    if not cert_no:
-        return lab, "REJECTED", "Certificate number not found in report."
-
-    if match_source in {"ulr", "ulr-cert-candidate"} and not _lab_matches_cert(lab, cert_no):
-        return lab, "REJECTED", "Extracted certificate number does not match this ULR in lab database."
-
-    if not ulr:
-        return lab, "REJECTED", "ULR number not found in report."
-
-    cert_clean = cert_no.replace("-", "")
-    lab_ulr = normalize_ulr(lab.ulr_number) if getattr(lab, "ulr_number", None) else None
-    if lab_ulr:
-        if ulr != lab_ulr:
-            return lab, "REJECTED", "Extracted ULR is different from the ULR mapped to this certificate in lab database."
-    elif not ulr.startswith(cert_clean):
-        return lab, "REJECTED", "Extracted ULR does not match this certificate number."
-
-    duplicate_qs = Report.objects.filter(ulr_number__iexact=ulr)
-    if report_id:
-        duplicate_qs = duplicate_qs.exclude(id=report_id)
-    if duplicate_qs.exists():
-        return lab, "DUPLICATE_ULR", "ULR already exists in uploaded reports."
 
     return lab, "VALID", None
 

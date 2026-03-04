@@ -57,9 +57,9 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
     issue_date = str(lab.issue_date) if lab and lab.issue_date else None
     to_date = str(lab.to_date) if lab and lab.to_date else None
     return {
-        "lab_name": report.lab_name,
+        "lab_name": lab.laboratory_name if lab else report.lab_name,
         "labtype": lab.labtype if lab else None,
-        "certificate_no": report.accreditation_no,
+        "certificate_no": lab.cert_no if lab else report.accreditation_no,
         "ulr_number": report.ulr_number,
         "status": report.status,
         "rejection_reason": report.rejection_reason,
@@ -119,8 +119,7 @@ class UploadReportView(APIView):
 
             if lab:
                 report.lab_name = lab.laboratory_name
-                if not report.accreditation_no:
-                    report.accreditation_no = lab.cert_no
+                report.accreditation_no = lab.cert_no
             report.save()
 
             return Response(
