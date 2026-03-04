@@ -107,6 +107,8 @@ def _extract_text_with_pdftotext(pdf_path, timeout_seconds=20):
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="ignore",
             timeout=timeout_seconds,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
@@ -254,6 +256,8 @@ def normalize_ulr(ulr):
     if not ulr:
         return None
     normalized = re.sub(r"[^A-Z0-9]", "", str(ulr).upper())
+    if normalized.startswith("7C"):
+        normalized = f"TC{normalized[2:]}"
     if not normalized:
         return None
     return normalized
@@ -317,6 +321,13 @@ def _possible_certs_from_ulr(ulr):
         if len(tail) >= cert_len + 2:
             candidates.append(f"{prefix}-{tail[:cert_len]}")
     return candidates
+
+
+def _cert_from_ulr_fallback(ulr):
+    candidates = _possible_certs_from_ulr(ulr)
+    if not candidates:
+        return None
+    return candidates[0]
 
 
 def _find_lab_by_cert(cert_no, labtype=None):
@@ -453,6 +464,9 @@ def extract_fields(text):
         ulr_match = re.search(rf"\b{cert_clean}[A-Z0-9]{{8,}}\b", clean_text)
         if ulr_match:
             ulr = normalize_ulr(ulr_match.group(0))
+
+    if not certificate_no and ulr:
+        certificate_no = _cert_from_ulr_fallback(ulr)
 
     issue_date = _extract_issue_date(clean_text)
     to_date = _extract_date_by_labels(clean_text, TO_DATE_LABEL_PATTERNS)

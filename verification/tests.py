@@ -4,7 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from .models import LabMaster, Report
-from .utils import extract_fields, parse_date, validate_report
+from .utils import extract_fields, normalize_ulr, parse_date, validate_report
 
 
 class ExtractionTests(TestCase):
@@ -55,6 +55,16 @@ class ExtractionTests(TestCase):
         """
         fields = extract_fields(text)
         self.assertEqual(fields["certificate_no"], "TC-11554")
+
+    def test_certificate_falls_back_to_ulr_prefix_when_logo_cert_missing(self):
+        text = """
+        ULR No: TC861725000000126F
+        """
+        fields = extract_fields(text)
+        self.assertEqual(fields["certificate_no"], "TC-861725")
+
+    def test_ulr_normalization_fixes_common_ocr_7c_prefix(self):
+        self.assertEqual(normalize_ulr("7C504024000036001F"), "TC504024000036001F")
 
 
 class ReportFetchTests(TestCase):

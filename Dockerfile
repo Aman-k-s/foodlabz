@@ -16,6 +16,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 CMD sh -c "python manage.py migrate && \
+echo \"CLEAR_REPORTS=${CLEAR_REPORTS}\" && \
+case \"${CLEAR_REPORTS}\" in \
+  true|TRUE|True|1) \
+    echo 'Starting one-time report cleanup' && \
+    python manage.py clear_reports ;; \
+  *) \
+    echo 'Skipping report cleanup' ;; \
+esac && \
 echo \"RUN_LAB_IMPORT=${RUN_LAB_IMPORT}\" && \
 case \"${RUN_LAB_IMPORT}\" in \
   true|TRUE|True|1) \
