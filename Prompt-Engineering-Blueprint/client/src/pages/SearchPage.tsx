@@ -1,8 +1,9 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useVerifyCertificate, useUploadCertificate } from "@/hooks/use-certificates";
 import { ShieldCheck, Search, ArrowRight, Loader2, Upload } from "lucide-react";
 import { motion } from "framer-motion";
+import { BrandLogo } from "@/components/common/BrandLogo";
 
 export default function SearchPage() {
   const [ulr, setUlr] = useState("");
@@ -11,7 +12,36 @@ export default function SearchPage() {
   const uploadMutation = useUploadCertificate();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const progressTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (uploadMutation.isPending) {
+      setUploadProgress((current) => (current < 10 ? 10 : current));
+      progressTimerRef.current = window.setInterval(() => {
+        setUploadProgress((current) => {
+          if (current >= 92) return current;
+          const delta = current < 60 ? 6 : 2;
+          return Math.min(92, current + delta);
+        });
+      }, 500);
+    } else {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      setUploadProgress(0);
+    }
+
+    return () => {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+    };
+  }, [uploadMutation.isPending]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,14 +64,19 @@ export default function SearchPage() {
     });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processUpload = (file: File) => {
     if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setErrorMsg("Only PDF files are supported.");
+      return;
+    }
 
     setErrorMsg(null);
     setUploadedFileUrl(null);
+    setUploadProgress(10);
     uploadMutation.mutate(file, {
       onSuccess: (data) => {
+        setUploadProgress(100);
         const normalizedUlr = (data.ulr || "").trim();
         if (normalizedUlr) {
           setLocation(`/dashboard/${encodeURIComponent(normalizedUlr)}`);
@@ -57,9 +92,35 @@ export default function SearchPage() {
         );
       },
       onError: (err: any) => {
+        setUploadProgress(0);
         setErrorMsg(err?.message || "Failed to process document. Please try manual entry.");
       },
     });
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    processUpload(file as File);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (verifyMutation.isPending || uploadMutation.isPending) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) processUpload(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (!uploadMutation.isPending && !verifyMutation.isPending) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
   };
 
   return (
@@ -75,11 +136,14 @@ export default function SearchPage() {
         className="w-full max-w-3xl z-10"
       >
         <div className="bg-white/60 backdrop-blur-2xl rounded-3xl shadow-2xl shadow-cyan-500/20 border border-white/70 p-8 md:p-12 text-center">
-          <div className="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-navy/20">
-            <ShieldCheck className="w-8 h-8 text-white" />
+          <div className="mx-auto mb-6 flex items-center justify-center">
+            <BrandLogo
+              className="h-14 w-auto object-contain"
+              fallbackClassName="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center shadow-lg shadow-navy/20"
+            />
           </div>
 
-          <h2 className="text-3xl font-bold text-navy mb-3 font-display">Certificate Verification</h2>
+          <h2 className="text-3xl font-bold text-navy mb-3 font-display">FoodLabz Report Verification</h2>
           <p className="text-muted-foreground mb-10">
             Enter the 18-digit NABL ULR sequence or upload a test report to begin compliance validation.
           </p>
@@ -172,12 +236,17 @@ export default function SearchPage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadMutation.isPending || verifyMutation.isPending}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
               className={`
                 w-full flex items-center justify-center gap-2 py-4 rounded-xl font-bold border-2 border-dashed
                 transition-all duration-300
                 ${uploadMutation.isPending
                   ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
-                  : "border-trust/30 text-trust hover:border-trust hover:bg-trust/5"}
+                  : isDragging
+                    ? "border-trust text-trust bg-trust/10"
+                    : "border-trust/30 text-trust hover:border-trust hover:bg-trust/5"}
               `}
             >
               {uploadMutation.isPending ? (
@@ -188,10 +257,23 @@ export default function SearchPage() {
               ) : (
                 <>
                   <Upload className="w-5 h-5" />
-                  Upload Test Report
+                  Upload or Drag & Drop PDF
                 </>
               )}
             </button>
+            {uploadMutation.isPending && (
+              <div className="w-full">
+                <div className="mt-3 h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full bg-trust transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground text-center">
+                  Processing report... {uploadProgress}%
+                </p>
+              </div>
+            )}
             {uploadedFileUrl && (
               <a
                 href={uploadedFileUrl}

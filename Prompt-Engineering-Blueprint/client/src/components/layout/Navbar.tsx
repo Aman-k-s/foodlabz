@@ -1,14 +1,16 @@
-import { ShieldCheck, Search, ShieldAlert } from "lucide-react";
+import { Search } from "lucide-react";
 import { Link } from "wouter";
+import { BrandLogo } from "@/components/common/BrandLogo";
 
 export function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="bg-navy p-2 rounded-lg group-hover:bg-trust transition-colors">
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
+          <BrandLogo
+            className="h-10 w-auto object-contain"
+            fallbackClassName="w-10 h-10 bg-navy rounded-lg group-hover:bg-trust transition-colors flex items-center justify-center"
+          />
           <div>
             <h1 className="text-xl font-bold text-navy tracking-tight leading-none">FoodLabz <span className="text-trust">Node 3</span></h1>
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground leading-none mt-1">Compliance Dashboard</p>
