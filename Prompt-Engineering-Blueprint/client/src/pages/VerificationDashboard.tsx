@@ -4,7 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { 
-  Building2, MapPin, Calendar, CheckCircle2, XCircle, AlertTriangle, 
+  Building2, MapPin, Calendar, CheckCircle2, XCircle, 
   FileText, ShieldAlert, ExternalLink
 } from "lucide-react";
 
@@ -57,12 +57,10 @@ export default function VerificationDashboard() {
 
   // If not loading and no certificate found, we still show the dashboard but in an "Invalid" state
   const isNotFound = !cert;
-  
-  // Derive top-level status
-  const hasAnomalies = cert?.testParameters?.some(p => !p.isAccredited) || !cert?.scopeValid;
-  const isRejected = cert?.status === "REJECTED";
-  const isCritical = isNotFound || !cert?.isVerified || !cert?.signatureValid;
-  const isLicenseExpired = cert?.licenseExpiry ? new Date(cert.licenseExpiry) < new Date() : false;
+  const isPassed = cert?.status === "VALID";
+  const failureReason = isNotFound
+    ? `ULR ${ulr} does not match any uploaded record.`
+    : (cert?.rejectionReason || "Validation failed.");
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-100 via-cyan-50 to-emerald-100 flex flex-col relative overflow-hidden">
@@ -77,31 +75,18 @@ export default function VerificationDashboard() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className={`mb-8 p-4 rounded-xl shadow-sm border flex items-start sm:items-center gap-4 backdrop-blur-md ${
-            isCritical || isLicenseExpired ? 'bg-critical/10 border-critical/30 text-critical' :
-            hasAnomalies ? 'bg-warning/10 border-warning/30 text-warning' :
-            'bg-success/10 border-success/30 text-success'
+            isPassed ? 'bg-success/10 border-success/30 text-success' : 'bg-critical/10 border-critical/30 text-critical'
           }`}
         >
           <div className="shrink-0 mt-0.5 sm:mt-0">
-            {isCritical || isLicenseExpired ? <XCircle className="w-8 h-8" /> : 
-             hasAnomalies ? <AlertTriangle className="w-8 h-8" /> : 
-             <CheckCircle2 className="w-8 h-8" />}
+            {isPassed ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
           </div>
           <div>
             <h2 className="text-lg font-bold">
-              {isNotFound ? 'Invalid Report: Record Not Found' :
-               isLicenseExpired ? 'Laboratory License Expired' :
-               isCritical ? 'Critical Assurance Failure' :
-               hasAnomalies ? 'Review by Exception: Anomalies Detected' :
-               'Full Compliance Assured'}
+              {isPassed ? "PASSED" : "FAILED"}
             </h2>
             <p className="text-sm opacity-90 mt-0.5">
-              {isNotFound ? `The ULR ${ulr} does not match any authenticated record in the NABL registry. This report is considered invalid.` :
-               isRejected ? (cert?.rejectionReason || "This report was rejected due to validation mismatch.") :
-               isLicenseExpired ? `The issuing laboratory's NABL license expired on ${cert?.licenseExpiry ? format(new Date(cert.licenseExpiry), "MMM do, yyyy") : 'N/A'}.` :
-               isCritical ? 'The laboratory identity or digital signatures failed cryptographic validation. Do not accept this report.' :
-               hasAnomalies ? 'Report is authentic, but contains parameters outside the approved accreditation scope. Manual review required.' :
-               'All cryptographic hashes, scope parameters, and raw data signatures match registry records.'}
+              {isPassed ? "Passed." : `Failed: ${failureReason}`}
             </p>
           </div>
         </motion.div>
@@ -173,15 +158,15 @@ export default function VerificationDashboard() {
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</p>
                   <div className="flex">
-                    <Badge icon={cert?.status === 'VALID' ? <CheckCircle2 /> : <XCircle />} color={cert?.status === 'VALID' ? 'success' : 'critical'}>
-                      {cert?.status || 'INVALID'}
+                    <Badge icon={isPassed ? <CheckCircle2 /> : <XCircle />} color={isPassed ? 'success' : 'critical'}>
+                      {isPassed ? "PASSED" : "FAILED"}
                     </Badge>
                   </div>
                 </div>
-                {isRejected && (
+                {!isPassed && (
                   <div className="space-y-1 md:col-span-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rejection Reason</p>
-                    <p className="text-critical font-medium text-sm">{cert?.rejectionReason || "Validation failed."}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reason</p>
+                    <p className="text-critical font-medium text-sm">{failureReason}</p>
                   </div>
                 )}
                 
@@ -195,15 +180,6 @@ export default function VerificationDashboard() {
                   <p className="text-navy font-mono font-medium text-lg">{cert?.validTill ? format(new Date(cert.validTill), "yyyy-MM-dd") : 'N/A'}</p>
                 </div>
               </div>
-
-              {(isLicenseExpired || isNotFound) && (
-                <div className="mt-8 p-4 bg-critical/5 border border-critical/20 rounded-xl flex items-center gap-3 text-critical">
-                  <AlertTriangle className="w-5 h-5" />
-                  <p className="text-sm font-semibold">
-                    {isNotFound ? 'Report details could not be found in the authoritative registry.' : 'Laboratory license has expired or is currently invalid.'}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>

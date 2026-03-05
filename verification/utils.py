@@ -500,21 +500,20 @@ def validate_report(data, report_id=None):
     ulr = normalize_ulr(data.get("ulr"))
     cert_no = data.get("certificate_no")
     labtype = data.get("labtype")
-    lab = _find_lab_by_cert(cert_no, labtype=labtype) if cert_no else None
-
-    if not lab and ulr:
-        # Recovery path: derive possible certificate numbers from ULR prefix,
-        # then validate against certificate records in Excel DB.
-        for candidate_cert in _possible_certs_from_ulr(ulr):
-            lab = _find_lab_by_cert(candidate_cert, labtype=labtype)
-            if lab:
-                break
-
-    if not cert_no and not lab:
+    if not cert_no:
         return None, "REJECTED", "Certificate number not found in report."
 
+    lab = _find_lab_by_cert(cert_no, labtype=labtype)
     if not lab:
-        return None, "REJECTED", "Incorrect certificate number."
+        return None, "REJECTED", "Certificate number does not exist in lab database."
+
+    cert_token = normalize_cert_no(cert_no)
+    if ulr and cert_token and not ulr.startswith(cert_token):
+        return lab, "REJECTED", "Certificate number does not match ULR."
+
+    expected_ulr = normalize_ulr(lab.ulr_number)
+    if ulr and expected_ulr and ulr != expected_ulr:
+        return lab, "REJECTED", "Certificate number does not match ULR."
 
     return lab, "VALID", None
 

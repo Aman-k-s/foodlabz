@@ -157,7 +157,7 @@ class ValidationTests(TestCase):
         self.assertEqual(status, "VALID")
         self.assertIsNone(reason)
 
-    def test_ulr_mismatch_does_not_reject_in_certificate_first_mode(self):
+    def test_ulr_mismatch_rejects(self):
         lab, status, reason = validate_report(
             {
                 "certificate_no": "TC-6467",
@@ -168,5 +168,37 @@ class ValidationTests(TestCase):
             }
         )
         self.assertEqual(lab, self.lab)
-        self.assertEqual(status, "VALID")
-        self.assertIsNone(reason)
+        self.assertEqual(status, "REJECTED")
+        self.assertEqual(reason, "Certificate number does not match ULR.")
+
+    def test_unknown_certificate_rejects_even_if_ulr_present(self):
+        lab, status, reason = validate_report(
+            {
+                "certificate_no": "TC-9999",
+                "ulr": "TC64672600000001F",
+            }
+        )
+        self.assertIsNone(lab)
+        self.assertEqual(status, "REJECTED")
+        self.assertEqual(reason, "Certificate number does not exist in lab database.")
+
+    def test_ulr_prefix_mismatch_rejects_even_when_lab_ulr_missing_in_db(self):
+        LabMaster.objects.create(
+            lab_id="LAB-3",
+            laboratory_name="No ULR Lab",
+            cert_no="TC-8777",
+            ulr_number=None,
+            labtype="Testing",
+            issue_date=date(2024, 12, 26),
+            to_date=date(2028, 12, 25),
+            prime_address="Prime Address",
+        )
+        lab, status, reason = validate_report(
+            {
+                "certificate_no": "TC-8777",
+                "ulr": "TC25000000126FLABR",
+            }
+        )
+        self.assertIsNotNone(lab)
+        self.assertEqual(status, "REJECTED")
+        self.assertEqual(reason, "Certificate number does not match ULR.")
