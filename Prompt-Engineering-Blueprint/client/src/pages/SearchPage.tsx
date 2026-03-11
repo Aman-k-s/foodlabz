@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useVerifyCertificate, useUploadCertificate } from "@/hooks/use-certificates";
-import { ShieldCheck, Search, ArrowRight, Loader2, Upload, FileText } from "lucide-react";
+import { ShieldCheck, Search, ArrowRight, Loader2, Upload } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function SearchPage() {
@@ -28,7 +28,14 @@ export default function SearchPage() {
         setLocation(`/dashboard/${normalized}`);
       },
       onError: (err: any) => {
-        setErrorMsg(err.message);
+        const message = String(err?.message || "");
+        // Let dashboard render the explicit "not found/invalid" state
+        // instead of trapping users on the search page.
+        if (message.toLowerCase().includes("not found")) {
+          setLocation(`/dashboard/${normalized}`);
+          return;
+        }
+        setErrorMsg(message || "Verification failed. Please try again.");
       }
     });
   };
@@ -39,10 +46,15 @@ export default function SearchPage() {
 
     uploadMutation.mutate(file, {
       onSuccess: (data) => {
-        setLocation(`/dashboard/${data.ulr}`);
+        if (data?.ulr) {
+          setLocation(`/dashboard/${data.ulr}`);
+          return;
+        }
+        setErrorMsg("Could not detect a valid ULR from the uploaded document.");
       },
       onError: (err: any) => {
-        setErrorMsg("Failed to process document. Please try manual entry.");
+        const message = String(err?.message || "");
+        setErrorMsg(message || "Failed to process document. Please try manual entry.");
       }
     });
   };
@@ -57,14 +69,14 @@ export default function SearchPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-xl z-10"
+        className="w-full max-w-5xl z-10"
       >
         <div className="bg-white rounded-3xl shadow-xl shadow-navy/5 border border-border p-8 md:p-12 text-center">
-          <div className="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-navy/20">
-            <ShieldCheck className="w-8 h-8 text-white" />
+          <div className="mx-auto mb-6 w-full max-w-[760px]">
+            <img src="/dark cyan.png" alt="FoodLabz" className="block w-full h-auto" />
           </div>
           
-          <h2 className="text-3xl font-bold text-navy mb-3 font-display">Certificate Verification</h2>
+          <h2 className="text-3xl font-bold text-navy mb-3 font-display">FoodLabz Report Verification</h2>
           <p className="text-muted-foreground mb-10">
             Enter the 18-digit NABL ULR sequence or upload a test report to begin compliance validation.
           </p>
@@ -177,6 +189,13 @@ export default function SearchPage() {
                 </>
               )}
             </button>
+
+            <Link
+              href="/labs"
+              className="block w-full rounded-xl border border-border bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-navy transition-colors hover:bg-slate-100"
+            >
+              View All Labs
+            </Link>
           </div>
           
           <div className="mt-8 pt-6 border-t border-border flex items-center justify-center gap-6 text-xs text-muted-foreground font-medium">

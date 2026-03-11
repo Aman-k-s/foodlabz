@@ -1,3 +1,7 @@
+from functools import lru_cache
+from pathlib import Path
+
+import pandas as pd
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -8,6 +12,91 @@ from .utils import (
     generate_file_hash,
     validate_report,
 )
+
+LAB_DIRECTORY_XLSX = Path(__file__).resolve().parent.parent / "File.xlsx"
+
+
+def _normalize_text(value):
+    if pd.isna(value) or value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_date(value):
+    if pd.isna(value) or value is None:
+        return None
+    parsed = pd.to_datetime(value, dayfirst=True, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.date().isoformat()
+
+
+def _parse_positive_int(value, default):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+@lru_cache(maxsize=1)
+def load_labs_directory():
+    if not LAB_DIRECTORY_XLSX.exists():
+        return []
+
+    df = pd.read_excel(
+        LAB_DIRECTORY_XLSX,
+        usecols=[
+            "LaboratoryName",
+            "Cert_No",
+            "Labtype",
+            "ExtendDate",
+            "ToDate",
+            "disciplineName",
+            "groupName",
+            "subGrpName",
+            "City",
+            "State",
+        ],
+    )
+    df.columns = df.columns.str.strip()
+
+    labs = []
+    for _, row in df.iterrows():
+        validity_date = _normalize_date(row.get("ExtendDate")) or _normalize_date(row.get("ToDate"))
+        segments = [
+            _normalize_text(row.get("disciplineName")),
+            _normalize_text(row.get("groupName")),
+            _normalize_text(row.get("subGrpName")),
+        ]
+        name = _normalize_text(row.get("LaboratoryName")) or "Unknown Laboratory"
+        certificate_no = _normalize_text(row.get("Cert_No")) or "N/A"
+        lab_type = _normalize_text(row.get("Labtype")) or "N/A"
+        district = _normalize_text(row.get("City"))
+        state = _normalize_text(row.get("State"))
+        commodity_or_segment = " | ".join(segment for segment in segments if segment) or "N/A"
+
+        labs.append(
+            {
+                "name": name,
+                "certificateNo": certificate_no,
+                "labType": lab_type,
+                "validityDate": validity_date,
+                "commodityOrSegment": commodity_or_segment,
+                "district": district,
+                "state": state,
+                "_search": " ".join(
+                    filter(
+                        None,
+                        [name.lower(), certificate_no.lower(), lab_type.lower(), commodity_or_segment.lower(), (district or "").lower(), (state or "").lower()],
+                    )
+                ),
+            }
+        )
+
+    labs.sort(key=lambda lab: (lab["name"], lab["certificateNo"]))
+    return labs
 
 
 class UploadReportView(APIView):
@@ -111,5 +200,36 @@ class ReportByUlrView(APIView):
                     "issue_date": issue_date,
                     "valid_till": valid_till,
                 },
+            }
+        )
+
+
+class LabsDirectoryView(APIView):
+    def get(self, request):
+        labs = load_labs_directory()
+        query = (request.query_params.get("q") or "").strip().lower()
+        page = _parse_positive_int(request.query_params.get("page"), 1)
+        page_size = min(_parse_positive_int(request.query_params.get("page_size"), 50), 100)
+
+        if query:
+            filtered_labs = [lab for lab in labs if query in lab["_search"]]
+        else:
+            filtered_labs = labs
+
+        total = len(filtered_labs)
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = [
+            {key: value for key, value in lab.items() if key != "_search"}
+            for lab in filtered_labs[start:end]
+        ]
+
+        return Response(
+            {
+                "success": True,
+                "total": total,
+                "page": page,
+                "pageSize": page_size,
+                "data": page_items,
             }
         )

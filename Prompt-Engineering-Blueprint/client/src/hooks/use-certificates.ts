@@ -17,11 +17,43 @@ type DjangoEnvelope = {
   data: DjangoReportData;
 };
 
-const DJANGO_API_BASE = (
-  import.meta.env.VITE_DJANGO_API_BASE ||
-  import.meta.env.VITE_BACKEND_URL ||
-  ""
-).replace(/\/$/, "");
+export type LabDirectoryItem = {
+  name: string;
+  certificateNo: string;
+  labType: string;
+  validityDate: string | null;
+  commodityOrSegment: string;
+  district: string | null;
+  state: string | null;
+};
+
+type LabsDirectoryEnvelope = {
+  success: boolean;
+  total: number;
+  page: number;
+  pageSize: number;
+  data: LabDirectoryItem[];
+};
+
+function inferDjangoBase() {
+  if (typeof window === "undefined") return "";
+
+  const envBase =
+    import.meta.env.VITE_DJANGO_API_BASE ||
+    import.meta.env.VITE_BACKEND_URL ||
+    "";
+
+  if (envBase) return envBase.replace(/\/$/, "");
+
+  const { protocol, hostname, port } = window.location;
+  if (port === "5000" || port === "5173") {
+    return `${protocol}//${hostname}:8000`;
+  }
+
+  return "";
+}
+
+const DJANGO_API_BASE = inferDjangoBase();
 
 function djangoUrl(path: string): string {
   return DJANGO_API_BASE ? `${DJANGO_API_BASE}${path}` : path;
@@ -77,6 +109,25 @@ export function useCertificates() {
       const res = await fetch(api.certificates.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch certificates");
       return res.json() as Promise<CertificateResponse[]>;
+    },
+  });
+}
+
+export function useLabsDirectory(query: string, page: number, pageSize = 50) {
+  return useQuery({
+    queryKey: ["labs-directory", query, page, pageSize],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (query.trim()) {
+        params.set("q", query.trim());
+      }
+
+      const res = await fetch(djangoUrl(`/api/labs/?${params.toString()}`));
+      if (!res.ok) throw new Error("Failed to fetch labs directory");
+      return (await res.json()) as LabsDirectoryEnvelope;
     },
   });
 }
