@@ -7,6 +7,7 @@ from datetime import datetime
 
 import pytesseract
 from pdf2image import convert_from_path
+from django.utils import timezone
 
 from .models import LabMaster, Report
 
@@ -496,7 +497,9 @@ def extract_fields(text):
     }
 
 
-def validate_report(data, report_id=None):
+def validate_report(data, report_id=None, upload_date=None):
+    if upload_date is None:
+        upload_date = timezone.localdate()
     ulr = normalize_ulr(data.get("ulr"))
     cert_no = data.get("certificate_no")
     labtype = data.get("labtype")
@@ -514,6 +517,10 @@ def validate_report(data, report_id=None):
     expected_ulr = normalize_ulr(lab.ulr_number)
     if ulr and expected_ulr and ulr != expected_ulr:
         return lab, "REJECTED", "Certificate number does not match ULR."
+
+    valid_till = lab.extend_date or lab.to_date
+    if valid_till and upload_date > valid_till:
+        return lab, "REJECTED", "Report expired."
 
     return lab, "VALID", None
 

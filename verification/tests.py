@@ -202,3 +202,26 @@ class ValidationTests(TestCase):
         self.assertIsNotNone(lab)
         self.assertEqual(status, "REJECTED")
         self.assertEqual(reason, "Certificate number does not match ULR.")
+
+    def test_report_expired_when_upload_date_after_valid_till(self):
+        lab = LabMaster.objects.create(
+            lab_id="LAB-4",
+            laboratory_name="Expired Lab",
+            cert_no="TC-9000",
+            ulr_number="TC90002600000001F",
+            labtype="Testing",
+            issue_date=date(2024, 6, 10),
+            to_date=date(2025, 6, 10),
+            prime_address="Prime Address",
+        )
+        lab, status, reason = validate_report(
+            {
+                "certificate_no": "TC-9000",
+                "ulr": "TC90002600000001F",
+                "lab_name": "Expired Lab",
+            },
+            upload_date=date(2026, 3, 11),
+        )
+        self.assertEqual(lab.cert_no, "TC-9000")
+        self.assertEqual(status, "REJECTED")
+        self.assertEqual(reason, "Report expired.")

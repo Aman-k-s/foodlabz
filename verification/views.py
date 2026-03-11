@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -112,7 +113,12 @@ class UploadReportView(APIView):
             report.accreditation_no = extracted.get("certificate_no")
             report.ulr_number = normalize_ulr(extracted.get("ulr"))
 
-            lab, status, rejection_reason = validate_report(extracted, report_id=report.id)
+            upload_date = timezone.localdate()
+            lab, status, rejection_reason = validate_report(
+                extracted,
+                report_id=report.id,
+                upload_date=upload_date,
+            )
             report.status = status
             report.validation_score = 100 if status == "VALID" else 0
             report.rejection_reason = rejection_reason
