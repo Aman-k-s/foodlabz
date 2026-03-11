@@ -520,7 +520,7 @@ def validate_report(data, report_id=None, upload_date=None):
 
     valid_till = lab.extend_date or lab.to_date
     if valid_till and upload_date > valid_till:
-        return lab, "REJECTED", "Report expired."
+        return lab, "REJECTED", "The test report is invalid because the laboratory's certificate expired before the test was conducted."
 
     return lab, "VALID", None
 

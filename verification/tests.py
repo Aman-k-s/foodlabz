@@ -224,4 +224,7 @@ class ValidationTests(TestCase):
         )
         self.assertEqual(lab.cert_no, "TC-9000")
         self.assertEqual(status, "REJECTED")
-        self.assertEqual(reason, "Report expired.")
+        self.assertEqual(
+            reason,
+            "The test report is invalid because the laboratory's certificate expired before the test was conducted.",
+        )
