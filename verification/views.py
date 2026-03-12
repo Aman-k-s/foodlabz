@@ -3,12 +3,13 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Report
+from .models import LabMaster, Report
 from .utils import (
     extract_fields,
     extract_text_from_pdf,
@@ -193,3 +194,54 @@ class ReportMediaView(APIView):
         if not requested.exists() or not requested.is_file():
             raise Http404("File not found")
         return FileResponse(requested.open("rb"), as_attachment=False, filename=requested.name)
+
+
+class LabsDirectoryView(APIView):
+    def get(self, request):
+        query = (request.query_params.get("q") or "").strip()
+        page = max(int(request.query_params.get("page") or 1), 1)
+        page_size = min(max(int(request.query_params.get("page_size") or 25), 1), 200)
+
+        labs = LabMaster.objects.all()
+        if query:
+            labs = labs.filter(
+                Q(laboratory_name__icontains=query)
+                | Q(cert_no__icontains=query)
+                | Q(ulr_number__icontains=query)
+                | Q(labtype__icontains=query)
+                | Q(city__icontains=query)
+                | Q(state__icontains=query)
+                | Q(prime_address__icontains=query)
+            )
+
+        total = labs.count()
+        labs = labs.order_by("laboratory_name", "cert_no")
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = []
+        for lab in labs[start:end]:
+            items.append(
+                {
+                    "lab_name": lab.laboratory_name,
+                    "cert_no": lab.cert_no,
+                    "ulr_number": lab.ulr_number,
+                    "labtype": lab.labtype,
+                    "issue_date": str(lab.issue_date) if lab.issue_date else None,
+                    "to_date": str(lab.to_date) if lab.to_date else None,
+                    "extend_date": str(lab.extend_date) if lab.extend_date else None,
+                    "city": lab.city,
+                    "state": lab.state,
+                    "prime_address": lab.prime_address,
+                }
+            )
+
+        return Response(
+            {
+                "success": True,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "data": items,
+            }
+        )

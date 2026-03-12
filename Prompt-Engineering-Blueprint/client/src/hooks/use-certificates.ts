@@ -33,6 +33,27 @@ type DjangoListEnvelope = {
   data: DjangoReportData[];
 };
 
+export type LabDirectoryItem = {
+  lab_name: string;
+  cert_no: string;
+  ulr_number: string | null;
+  labtype: string;
+  issue_date: string | null;
+  to_date: string | null;
+  extend_date: string | null;
+  city: string | null;
+  state: string | null;
+  prime_address: string | null;
+};
+
+type LabsDirectoryEnvelope = {
+  success: boolean;
+  total: number;
+  page: number;
+  page_size: number;
+  data: LabDirectoryItem[];
+};
+
 const DJANGO_API_BASE = (
   import.meta.env.PROD
     ? ""
@@ -137,6 +158,25 @@ export function useUploadedReports() {
       if (!res.ok) throw new Error("Failed to fetch uploaded reports");
       const body = (await res.json()) as DjangoListEnvelope;
       return body.data.map((item) => normalizeToCertificate(item));
+    },
+    retry: false,
+  });
+}
+
+export function useLabsDirectory(query: string, page: number, pageSize = 25) {
+  return useQuery({
+    queryKey: ["labs-directory", query, page, pageSize],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (query.trim()) {
+        params.set("q", query.trim());
+      }
+      const res = await fetch(djangoUrl(`/api/labs/?${params.toString()}`));
+      if (!res.ok) throw new Error("Failed to fetch labs directory");
+      return (await res.json()) as LabsDirectoryEnvelope;
     },
     retry: false,
   });

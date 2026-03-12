@@ -31,7 +31,7 @@ If you cannot use Render Shell:
 1. In Render service Environment, set `RUN_LAB_IMPORT=true`
 2. Deploy once
 3. Startup will run:
-   - `python manage.py shell -c "from verification.import_labs import import_labs_from_excel; import_labs_from_excel('file2.xlsx')"`
+   - `python manage.py shell -c "from verification.import_labs import import_labs_from_excel; import_labs_from_excel('file1.xlsx')"`
 4. After successful deploy/import, set `RUN_LAB_IMPORT=false`
 5. Deploy again (prevents re-import on every restart)
 

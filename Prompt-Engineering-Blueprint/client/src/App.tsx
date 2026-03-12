@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 
 import SearchPage from "@/pages/SearchPage";
 import VerificationDashboard from "@/pages/VerificationDashboard";
+import LabsDirectoryPage from "@/pages/LabsDirectoryPage";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={SearchPage} />
       <Route path="/dashboard" component={SearchPage} />
       <Route path="/dashboard/" component={SearchPage} />
+      <Route path="/labs" component={LabsDirectoryPage} />
       <Route path="/dashboard/:ulr" component={VerificationDashboard} />
       <Route component={NotFound} />
     </Switch>
