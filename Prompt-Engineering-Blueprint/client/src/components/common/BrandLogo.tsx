@@ -19,10 +19,12 @@ export function BrandLogo({ className = "h-10 w-auto", fallbackClassName = "" }:
 
   return (
     <img
-      src="/api/media/reports/logo.png"
+      src="/foodlabz-logo.png"
       alt="FoodLabz"
       className={className}
       onError={() => setLogoFailed(true)}
     />
   );
 }
+
+

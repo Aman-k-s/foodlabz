@@ -199,6 +199,9 @@ class ReportMediaView(APIView):
 class LabsDirectoryView(APIView):
     def get(self, request):
         query = (request.query_params.get("q") or "").strip()
+        labtype = (request.query_params.get("labtype") or "").strip()
+        state = (request.query_params.get("state") or "").strip()
+        city = (request.query_params.get("city") or "").strip()
         page = max(int(request.query_params.get("page") or 1), 1)
         page_size = min(max(int(request.query_params.get("page_size") or 25), 1), 200)
 
@@ -213,6 +216,13 @@ class LabsDirectoryView(APIView):
                 | Q(state__icontains=query)
                 | Q(prime_address__icontains=query)
             )
+
+        if labtype:
+            labs = labs.filter(labtype__iexact=labtype)
+        if state:
+            labs = labs.filter(state__icontains=state)
+        if city:
+            labs = labs.filter(city__icontains=city)
 
         total = labs.count()
         labs = labs.order_by("laboratory_name", "cert_no")

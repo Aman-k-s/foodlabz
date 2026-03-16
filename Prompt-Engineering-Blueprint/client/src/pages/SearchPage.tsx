@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useVerifyCertificate, useUploadCertificate } from "@/hooks/use-certificates";
-import { ShieldCheck, Search, ArrowRight, Loader2, Upload } from "lucide-react";
+import { Building2, ShieldCheck, Search, ArrowRight, Loader2, Upload } from "lucide-react";
 import { motion } from "framer-motion";
 import { BrandLogo } from "@/components/common/BrandLogo";
 
@@ -285,6 +285,13 @@ export default function SearchPage() {
                 Open Uploaded File
               </a>
             )}
+            <Link
+              href="/labs"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white/80 py-3 text-sm font-semibold text-navy transition-colors hover:bg-slate-100"
+            >
+              <Building2 className="h-4 w-4" />
+              View Lab Details
+            </Link>
           </div>
 
           <div className="mt-8 pt-6 border-t border-border flex items-center justify-center gap-6 text-xs text-muted-foreground font-medium">

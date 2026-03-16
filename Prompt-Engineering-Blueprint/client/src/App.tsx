@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import SearchPage from "@/pages/SearchPage";
 import VerificationDashboard from "@/pages/VerificationDashboard";
 import LabsDirectoryPage from "@/pages/LabsDirectoryPage";
+import LabsMapPage from "@/pages/LabsMapPage";
 
 function Router() {
   return (
@@ -16,6 +17,8 @@ function Router() {
       <Route path="/dashboard" component={SearchPage} />
       <Route path="/dashboard/" component={SearchPage} />
       <Route path="/labs" component={LabsDirectoryPage} />
+      <Route path="/labs/map/all" component={LabsMapPage} />
+      <Route path="/labs/map" component={LabsMapPage} />
       <Route path="/dashboard/:ulr" component={VerificationDashboard} />
       <Route component={NotFound} />
     </Switch>
@@ -34,3 +37,4 @@ function App() {
 }
 
 export default App;
+

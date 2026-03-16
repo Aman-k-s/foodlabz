@@ -163,9 +163,14 @@ export function useUploadedReports() {
   });
 }
 
-export function useLabsDirectory(query: string, page: number, pageSize = 25) {
+export function useLabsDirectory(
+  query: string,
+  page: number,
+  pageSize = 25,
+  filters?: { labtype?: string; state?: string; city?: string }
+) {
   return useQuery({
-    queryKey: ["labs-directory", query, page, pageSize],
+    queryKey: ["labs-directory", query, page, pageSize, filters],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -174,6 +179,9 @@ export function useLabsDirectory(query: string, page: number, pageSize = 25) {
       if (query.trim()) {
         params.set("q", query.trim());
       }
+      if (filters?.labtype) params.set("labtype", filters.labtype);
+      if (filters?.state) params.set("state", filters.state);
+      if (filters?.city) params.set("city", filters.city);
       const res = await fetch(djangoUrl(`/api/labs/?${params.toString()}`));
       if (!res.ok) throw new Error("Failed to fetch labs directory");
       return (await res.json()) as LabsDirectoryEnvelope;
