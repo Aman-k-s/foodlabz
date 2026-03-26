@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.recovery_backup/
+db.sqlite3
+media/
+staticfiles/
+node_modules/
+dist/
+Prompt-Engineering-Blueprint/node_modules/
+Prompt-Engineering-Blueprint/dist/
