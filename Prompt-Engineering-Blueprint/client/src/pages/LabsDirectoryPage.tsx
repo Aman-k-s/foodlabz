@@ -1,207 +1,186 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import { format } from "date-fns";
 import { Navbar } from "@/components/layout/Navbar";
-import { useLabsDirectory } from "@/hooks/use-certificates";
-import { MapPin, Search } from "lucide-react";
-import { motion } from "framer-motion";
+import { useLabsDirectory } from "@/hooks/use-labs";
+import { Building2, MapPinned, Search } from "lucide-react";
+
+const PAGE_SIZE = 50;
+
+function formatDate(value: Date | null, fallback = "N/A") {
+  if (!value) return fallback;
+  try {
+    return format(value, "yyyy-MM-dd");
+  } catch {
+    return fallback;
+  }
+}
 
 export default function LabsDirectoryPage() {
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [labTypeFilter, setLabTypeFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
-  const { data, isLoading, isError } = useLabsDirectory(query, page, 25, {
-    labtype: labTypeFilter || undefined,
-    state: stateFilter || undefined,
-    city: cityFilter || undefined,
+
+  const { data, isLoading, isError } = useLabsDirectory(search.trim(), page, PAGE_SIZE, {
+    labType: labTypeFilter.trim(),
+    state: stateFilter.trim(),
+    city: cityFilter.trim(),
   });
 
-  const labs = data?.data || [];
-  const total = data?.total || 0;
-  const pageSize = data?.page_size || 25;
-  const canPrev = page > 1;
-  const canNext = page * pageSize < total;
+  const totalPages = useMemo(() => {
+    if (!data?.count) return 1;
+    return Math.max(1, Math.ceil(data.count / PAGE_SIZE));
+  }, [data?.count]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-100 via-cyan-50 to-emerald-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-sky-100 via-cyan-50 to-emerald-100 flex flex-col relative overflow-hidden">
+      <div className="absolute top-[-12%] right-[-6%] w-[520px] h-[520px] bg-trust/20 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-[-12%] left-[-6%] w-[620px] h-[620px] bg-success/20 rounded-full blur-3xl"></div>
+      <div className="absolute top-[30%] left-[35%] w-[360px] h-[360px] bg-warning/20 rounded-full blur-3xl"></div>
       <Navbar />
-      <main className="flex-1 container mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white/70 rounded-3xl border border-white/80 shadow-2xl shadow-cyan-500/20 backdrop-blur-2xl p-6"
-        >
+
+      <main className="flex-1 container mx-auto px-4 py-8 relative z-10">
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/70 rounded-2xl shadow-2xl shadow-cyan-500/20 p-6 md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-navy font-display">All Labs Directory</h2>
-              <p className="text-sm text-muted-foreground">Search across labs loaded from file1.xlsx.</p>
+              <h1 className="text-2xl font-bold text-navy font-display flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-trust" />
+                All Labs Directory
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Search across all labs loaded from the registry dataset.
+              </p>
             </div>
-            <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
-              <div className="relative w-full md:w-80">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <div className="relative">
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="text"
-                  value={query}
+                  value={search}
                   onChange={(e) => {
-                    setQuery(e.target.value);
+                    setSearch(e.target.value);
                     setPage(1);
                   }}
-                  placeholder="Search lab, cert, city, state..."
-                  className="w-full rounded-xl border border-border bg-white/80 py-2.5 pl-9 pr-3 text-sm text-navy focus:border-trust focus:outline-none"
+                  placeholder="Search lab, certificate, city, state..."
+                  className="w-full sm:w-72 bg-white/80 border border-border rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-trust/30"
                 />
               </div>
-              <a
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  value={labTypeFilter}
+                  onChange={(e) => {
+                    setLabTypeFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Filter lab type"
+                  className="w-full sm:w-40 bg-white/80 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-trust/30"
+                />
+                <input
+                  value={stateFilter}
+                  onChange={(e) => {
+                    setStateFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Filter state"
+                  className="w-full sm:w-40 bg-white/80 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-trust/30"
+                />
+                <input
+                  value={cityFilter}
+                  onChange={(e) => {
+                    setCityFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Filter city"
+                  className="w-full sm:w-40 bg-white/80 border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-trust/30"
+                />
+              </div>
+              <Link
                 href="/labs/map/all"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white/80 px-4 py-2.5 text-sm font-semibold text-navy transition-colors hover:bg-slate-100"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-trust text-white text-sm font-semibold hover:bg-navy transition-colors shadow-lg shadow-trust/30"
               >
-                <MapPin className="h-4 w-4" />
-                View All Labs Map
-              </a>
+                <MapPinned className="w-4 h-4" />
+                View Labs Map
+              </Link>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-            <div className="md:col-span-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lab Type</label>
-              <select
-                value={labTypeFilter}
-                onChange={(e) => {
-                  setLabTypeFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="mt-1 w-full rounded-xl border border-border bg-white/80 py-2.5 px-3 text-sm text-navy focus:border-trust focus:outline-none"
-              >
-                <option value="">All</option>
-                <option value="Testing">Testing</option>
-                <option value="Calibration">Calibration</option>
-                <option value="Medical">Medical</option>
-                <option value="Chemical">Chemical</option>
-                <option value="Biological">Biological</option>
-                <option value="Microbiological">Microbiological</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">State</label>
-              <input
-                type="text"
-                value={stateFilter}
-                onChange={(e) => {
-                  setStateFilter(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="e.g. Maharashtra"
-                className="mt-1 w-full rounded-xl border border-border bg-white/80 py-2.5 px-3 text-sm text-navy focus:border-trust focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">City</label>
-              <input
-                type="text"
-                value={cityFilter}
-                onChange={(e) => {
-                  setCityFilter(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="e.g. Delhi"
-                className="mt-1 w-full rounded-xl border border-border bg-white/80 py-2.5 px-3 text-sm text-navy focus:border-trust focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wider text-muted-foreground">
+          <div className="mt-6 overflow-x-auto rounded-xl border border-white/70 bg-white/70">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-white/80 text-muted-foreground uppercase text-xs tracking-wider">
                 <tr>
-                  <th className="py-2 px-3">Lab Name</th>
-                  <th className="py-2 px-3">Certificate No</th>
-                  <th className="py-2 px-3">Lab Type</th>
-                  <th className="py-2 px-3">Valid Till</th>
-                  <th className="py-2 px-3">City/State</th>
-                  <th className="py-2 px-3">Address</th>
-                  <th className="py-2 px-3">Map</th>
+                  <th className="px-4 py-3">Lab Name</th>
+                  <th className="px-4 py-3">Certificate No</th>
+                  <th className="px-4 py-3">Lab Type</th>
+                  <th className="px-4 py-3">Valid Till</th>
+                  <th className="px-4 py-3">City / State</th>
+                  <th className="px-4 py-3">Address</th>
                 </tr>
               </thead>
-              <tbody className="text-navy">
+              <tbody className="divide-y divide-border/60">
                 {isLoading && (
                   <tr>
-                    <td className="py-4 px-3 text-muted-foreground" colSpan={7}>
-                      Loading labs...
+                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={6}>
+                      Loading labs directory...
                     </td>
                   </tr>
                 )}
                 {isError && (
                   <tr>
-                    <td className="py-4 px-3 text-critical" colSpan={7}>
-                      Failed to load labs. Check backend API.
+                    <td className="px-4 py-6 text-center text-critical font-medium" colSpan={6}>
+                      Unable to load lab directory. Please try again.
                     </td>
                   </tr>
                 )}
-                {!isLoading && !isError && labs.length === 0 && (
+                {!isLoading && !isError && data?.items?.length === 0 && (
                   <tr>
-                    <td className="py-4 px-3 text-muted-foreground" colSpan={7}>
+                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={6}>
                       No labs found for this search.
                     </td>
                   </tr>
                 )}
-                {labs.map((lab) => {
-                  const validTill = lab.extend_date || lab.to_date || "N/A";
-                  const cityState = [lab.city, lab.state].filter(Boolean).join(", ") || "";
-                      const mapQuery = encodeURIComponent(
-                        [lab.lab_name, lab.prime_address, lab.city, lab.state].filter(Boolean).join(", ")
-                      );
-                  return (
-                    <tr key={`${lab.cert_no}-${lab.lab_name}`} className="border-t border-border/60">
-                      <td className="py-3 px-3 font-medium">{lab.lab_name}</td>
-                      <td className="py-3 px-3 font-mono">{lab.cert_no}</td>
-                      <td className="py-3 px-3">{lab.labtype}</td>
-                      <td className="py-3 px-3 font-mono">{validTill}</td>
-                      <td className="py-3 px-3">{cityState || "N/A"}</td>
-                      <td className="py-3 px-3">{lab.prime_address || "N/A"}</td>
-                      <td className="py-3 px-3">
-                        <a
-                          href={`/labs/map?place=${mapQuery}`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-trust hover:text-navy hover:bg-slate-100"
-                        >
-                          <MapPin className="h-3.5 w-3.5" />
-                          View Map
-                        </a>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {data?.items?.map((lab) => (
+                  <tr key={lab.labId} className="hover:bg-white/80 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-navy">{lab.laboratoryName || "N/A"}</td>
+                    <td className="px-4 py-3 font-mono text-navy">{lab.certNo || "N/A"}</td>
+                    <td className="px-4 py-3 text-navy">{lab.labType || "N/A"}</td>
+                    <td className="px-4 py-3 text-navy">{formatDate(lab.validTill)}</td>
+                    <td className="px-4 py-3 text-navy">
+                      {[lab.city, lab.state].filter(Boolean).join(", ") || "N/A"}
+                    </td>
+                    <td className="px-4 py-3 text-navy text-xs leading-relaxed">
+                      {lab.address || "N/A"}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          <div className="mt-4 flex flex-col items-start justify-between gap-3 text-xs text-muted-foreground md:flex-row md:items-center">
-            <span>
-              Showing {labs.length} of {total} labs
-            </span>
+          <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between text-sm">
+            <p className="text-muted-foreground">
+              Showing page {data?.page || page} of {totalPages}
+            </p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={!canPrev}
-                className={`rounded-lg border px-3 py-1 text-xs font-semibold ${
-                  canPrev ? "border-border text-navy hover:bg-slate-100" : "border-border/40 text-muted-foreground"
-                }`}
+                disabled={page <= 1}
+                className="px-3 py-1.5 rounded-lg border border-border text-navy text-sm font-semibold disabled:opacity-50"
               >
-                Prev
+                Previous
               </button>
-              <span className="text-xs">Page {page}</span>
               <button
                 type="button"
-                onClick={() => setPage((prev) => prev + 1)}
-                disabled={!canNext}
-                className={`rounded-lg border px-3 py-1 text-xs font-semibold ${
-                  canNext ? "border-border text-navy hover:bg-slate-100" : "border-border/40 text-muted-foreground"
-                }`}
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-1.5 rounded-lg border border-border text-navy text-sm font-semibold disabled:opacity-50"
               >
                 Next
               </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </main>
     </div>
   );

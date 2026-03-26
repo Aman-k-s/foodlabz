@@ -2,6 +2,7 @@ from django.db import models
 class Report(models.Model):
     file = models.FileField(upload_to="reports/")
     file_hash = models.CharField(max_length=64, unique=True)
+    vendor = models.CharField(max_length=255, null=True, blank=True)
 
     lab_name = models.CharField(max_length=255, null=True, blank=True)
     accreditation_no = models.CharField(max_length=100, null=True, blank=True)

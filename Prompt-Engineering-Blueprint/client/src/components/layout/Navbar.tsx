@@ -1,4 +1,4 @@
-import { Building2, Search } from "lucide-react";
+import { MapPinned, Search } from "lucide-react";
 import { Link } from "wouter";
 import { BrandLogo } from "@/components/common/BrandLogo";
 
@@ -12,15 +12,19 @@ export function Navbar() {
             fallbackClassName="w-10 h-10 bg-navy rounded-lg group-hover:bg-trust transition-colors flex items-center justify-center"
           />
         </Link>
-        
+
         <nav className="flex items-center gap-6">
           <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-navy transition-colors flex items-center gap-2">
             <Search className="w-4 h-4" />
             Verify New ULR
           </Link>
           <Link href="/labs" className="text-sm font-medium text-muted-foreground hover:text-navy transition-colors flex items-center gap-2">
-            <Building2 className="w-4 h-4" />
-            View All Labs
+            <Search className="w-4 h-4" />
+            View Lab Details
+          </Link>
+          <Link href="/labs/map/all" className="text-sm font-medium text-muted-foreground hover:text-navy transition-colors flex items-center gap-2">
+            <MapPinned className="w-4 h-4" />
+            View Labs Map
           </Link>
           <div className="h-4 w-px bg-border"></div>
           <div className="flex items-center gap-2">

@@ -151,11 +151,6 @@ export default function VerificationDashboard() {
                 </div>
                 
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ULR Number</p>
-                  <p className="text-navy font-mono font-medium text-lg">{cert?.ulr || ulr}</p>
-                </div>
-                
-                <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</p>
                   <div className="flex">
                     <Badge icon={isPassed ? <CheckCircle2 /> : <XCircle />} color={isPassed ? 'success' : 'critical'}>

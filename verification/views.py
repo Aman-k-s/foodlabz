@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
@@ -32,7 +33,6 @@ def _reject_report(report, reason):
     try:
         report.save(update_fields=["status", "validation_score", "rejection_reason"])
     except Exception:
-        # Never re-raise from rejection path; we still want API response.
         pass
 
 
@@ -59,6 +59,7 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
     issue_date = str(lab.issue_date) if lab and lab.issue_date else None
     to_date = str(lab.to_date) if lab and lab.to_date else None
     return {
+        "vendor": report.vendor,
         "lab_name": lab.laboratory_name if lab else report.lab_name,
         "labtype": lab.labtype if lab else None,
         "certificate_no": lab.cert_no if lab else report.accreditation_no,
@@ -71,6 +72,22 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
         "address": _lab_address(lab),
         "file_url": _report_file_url(request, report),
         "created_at": report.created_at,
+    }
+
+
+def _serialize_lab(lab):
+    valid_till = lab.extend_date or lab.to_date
+    return {
+        "lab_id": lab.lab_id,
+        "laboratory_name": lab.laboratory_name,
+        "cert_no": lab.cert_no,
+        "labtype": lab.labtype,
+        "issue_date": str(lab.issue_date) if lab.issue_date else None,
+        "to_date": str(lab.to_date) if lab.to_date else None,
+        "valid_till": str(valid_till) if valid_till else None,
+        "city": lab.city,
+        "state": lab.state,
+        "address": lab.prime_address,
     }
 
 
@@ -92,17 +109,26 @@ class UploadReportView(APIView):
         report = None
         try:
             file = request.FILES.get("file")
+            vendor = (request.data.get("vendor") or "").strip()
             if not file:
                 return Response({"error": "No file uploaded"}, status=400)
+            if not vendor:
+                return Response({"error": "Vendor is required for demo uploads."}, status=400)
             if not str(file.name).lower().endswith(".pdf"):
                 return Response({"error": "Only PDF reports are supported for upload."}, status=400)
 
             file_hash = generate_file_hash(file)
-            report = Report.objects.filter(file_hash=file_hash).first()
-            if not report:
-                report = Report(file_hash=file_hash)
+            existing_file_report = Report.objects.filter(file_hash=file_hash).order_by("-created_at").first()
+            if existing_file_report:
+                return Response(
+                    {
+                        "error": "This exact report has already been uploaded in the demo database. Clear demo reports to upload it again."
+                    },
+                    status=400,
+                )
 
-            # Always refresh stored file and re-run extraction on the current upload.
+            report = Report(file_hash=file_hash)
+            report.vendor = vendor
             report.file = file
             report.status = "PENDING"
             report.rejection_reason = None
@@ -113,6 +139,16 @@ class UploadReportView(APIView):
 
             report.accreditation_no = extracted.get("certificate_no")
             report.ulr_number = normalize_ulr(extracted.get("ulr"))
+
+            if report.ulr_number:
+                duplicate_report = Report.objects.filter(ulr_number__iexact=report.ulr_number).order_by("-created_at").first()
+                if duplicate_report:
+                    return Response(
+                        {
+                            "error": "This ULR number has already been uploaded in the demo database. Clear demo reports to upload it again."
+                        },
+                        status=400,
+                    )
 
             upload_date = timezone.localdate()
             lab, status, rejection_reason = validate_report(
@@ -185,6 +221,69 @@ class UploadedReportsView(APIView):
         return Response({"success": True, "data": data})
 
 
+class ClearUploadedReportsView(APIView):
+    def post(self, request):
+        reports = list(Report.objects.all())
+        cleared = len(reports)
+        for report in reports:
+            try:
+                if report.file:
+                    report.file.delete(save=False)
+            except Exception:
+                pass
+        Report.objects.all().delete()
+        return Response({"success": True, "cleared": cleared})
+
+
+class LabsDirectoryView(APIView):
+    def get(self, request):
+        query = (request.GET.get("q") or "").strip()
+        labtype_filter = (request.GET.get("labtype") or "").strip()
+        state_filter = (request.GET.get("state") or "").strip()
+        city_filter = (request.GET.get("city") or "").strip()
+        try:
+            page = int(request.GET.get("page", 1))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(request.GET.get("page_size", 50))
+        except ValueError:
+            page_size = 50
+
+        page = max(page, 1)
+        page_size = max(1, min(page_size, 200))
+
+        labs = LabMaster.objects.all().order_by("laboratory_name")
+        if query:
+            labs = labs.filter(
+                Q(laboratory_name__icontains=query)
+                | Q(cert_no__icontains=query)
+                | Q(labtype__icontains=query)
+                | Q(city__icontains=query)
+                | Q(state__icontains=query)
+                | Q(prime_address__icontains=query)
+            )
+        if labtype_filter:
+            labs = labs.filter(labtype__icontains=labtype_filter)
+        if state_filter:
+            labs = labs.filter(state__icontains=state_filter)
+        if city_filter:
+            labs = labs.filter(city__icontains=city_filter)
+
+        paginator = Paginator(labs, page_size)
+        page_obj = paginator.get_page(page)
+        data = [_serialize_lab(lab) for lab in page_obj.object_list]
+        return Response(
+            {
+                "success": True,
+                "data": data,
+                "count": paginator.count,
+                "page": page_obj.number,
+                "page_size": page_size,
+            }
+        )
+
+
 class ReportMediaView(APIView):
     def get(self, request, file_path):
         media_root = Path(settings.MEDIA_ROOT).resolve()
@@ -194,64 +293,3 @@ class ReportMediaView(APIView):
         if not requested.exists() or not requested.is_file():
             raise Http404("File not found")
         return FileResponse(requested.open("rb"), as_attachment=False, filename=requested.name)
-
-
-class LabsDirectoryView(APIView):
-    def get(self, request):
-        query = (request.query_params.get("q") or "").strip()
-        labtype = (request.query_params.get("labtype") or "").strip()
-        state = (request.query_params.get("state") or "").strip()
-        city = (request.query_params.get("city") or "").strip()
-        page = max(int(request.query_params.get("page") or 1), 1)
-        page_size = min(max(int(request.query_params.get("page_size") or 25), 1), 200)
-
-        labs = LabMaster.objects.all()
-        if query:
-            labs = labs.filter(
-                Q(laboratory_name__icontains=query)
-                | Q(cert_no__icontains=query)
-                | Q(ulr_number__icontains=query)
-                | Q(labtype__icontains=query)
-                | Q(city__icontains=query)
-                | Q(state__icontains=query)
-                | Q(prime_address__icontains=query)
-            )
-
-        if labtype:
-            labs = labs.filter(labtype__iexact=labtype)
-        if state:
-            labs = labs.filter(state__icontains=state)
-        if city:
-            labs = labs.filter(city__icontains=city)
-
-        total = labs.count()
-        labs = labs.order_by("laboratory_name", "cert_no")
-
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = []
-        for lab in labs[start:end]:
-            items.append(
-                {
-                    "lab_name": lab.laboratory_name,
-                    "cert_no": lab.cert_no,
-                    "ulr_number": lab.ulr_number,
-                    "labtype": lab.labtype,
-                    "issue_date": str(lab.issue_date) if lab.issue_date else None,
-                    "to_date": str(lab.to_date) if lab.to_date else None,
-                    "extend_date": str(lab.extend_date) if lab.extend_date else None,
-                    "city": lab.city,
-                    "state": lab.state,
-                    "prime_address": lab.prime_address,
-                }
-            )
-
-        return Response(
-            {
-                "success": True,
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "data": items,
-            }
-        )

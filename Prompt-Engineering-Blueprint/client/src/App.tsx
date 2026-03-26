@@ -20,6 +20,10 @@ function Router() {
       <Route path="/labs/map/all" component={LabsMapPage} />
       <Route path="/labs/map" component={LabsMapPage} />
       <Route path="/dashboard/:ulr" component={VerificationDashboard} />
+      <Route path="/labs" component={LabsDirectoryPage} />
+      <Route path="/labs/map/:rest*" component={LabsMapPage} />
+      <Route path="/labs/map" component={LabsMapPage} />
+      <Route path="/labs/map/all" component={LabsMapPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -6,9 +6,11 @@ export type UiCertificate = CertificateResponse & {
   fileUrl?: string;
   createdAt?: Date | null;
   rejectionReason?: string | null;
+  vendor?: string | null;
 };
 
 type DjangoReportData = {
+  vendor?: string | null;
   lab_name: string | null;
   labtype: string | null;
   certificate_no: string | null;
@@ -90,6 +92,7 @@ function normalizeToCertificate(
   return {
     id: 0,
     ulr,
+    vendor: payload.vendor || null,
     labName: payload.lab_name || "Unknown Laboratory",
     labType: payload.labtype || "N/A",
     certificateNo: payload.certificate_no || "N/A",
@@ -220,9 +223,10 @@ export function useUploadCertificate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, vendor }: { file: File; vendor: string }) => {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("vendor", vendor);
 
       const res = await fetch(djangoUrl("/api/upload/"), {
         method: "POST",
@@ -259,6 +263,27 @@ export function useUploadCertificate() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData([api.certificates.getByUlr.path, data.ulr], data);
+      queryClient.invalidateQueries({ queryKey: ["django-uploaded-reports"] });
+    },
+  });
+}
+
+export function useClearUploadedReports() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(djangoUrl("/api/reports/clear/"), {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to clear demo reports.");
+      }
+      return res.json() as Promise<{ success: boolean; cleared: number }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["django-uploaded-reports"] });
+      queryClient.removeQueries({ queryKey: [api.certificates.getByUlr.path] });
     },
   });
 }
