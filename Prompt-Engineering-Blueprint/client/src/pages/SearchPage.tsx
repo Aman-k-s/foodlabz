@@ -7,7 +7,10 @@ import { BrandLogo } from "@/components/common/BrandLogo";
 
 export default function SearchPage() {
   const [ulr, setUlr] = useState("");
-  const [vendor, setVendor] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const [vendorName, setVendorName] = useState("");
+  const [consignmentId, setConsignmentId] = useState("");
+  const [commodity, setCommodity] = useState("");
   const [, setLocation] = useLocation();
   const verifyMutation = useVerifyCertificate();
   const uploadMutation = useUploadCertificate();
@@ -70,8 +73,20 @@ export default function SearchPage() {
 
   const processUpload = (file: File) => {
     if (!file) return;
-    if (!vendor.trim()) {
-      setErrorMsg("Vendor name is required before uploading a report.");
+    if (!vendorId.trim()) {
+      setErrorMsg("Vendor ID is required before uploading a report.");
+      return;
+    }
+    if (!vendorName.trim()) {
+      setErrorMsg("Vendor Name is required before uploading a report.");
+      return;
+    }
+    if (!consignmentId.trim()) {
+      setErrorMsg("Consignment ID is required before uploading a report.");
+      return;
+    }
+    if (!commodity.trim()) {
+      setErrorMsg("Commodity is required before uploading a report.");
       return;
     }
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
@@ -84,7 +99,13 @@ export default function SearchPage() {
     setUploadedFileUrl(null);
     setUploadProgress(10);
     uploadMutation.mutate(
-      { file, vendor: vendor.trim() },
+      {
+        file,
+        vendorId: vendorId.trim(),
+        vendorName: vendorName.trim(),
+        consignmentId: consignmentId.trim(),
+        commodity: commodity.trim(),
+      },
       {
         onSuccess: (data) => {
           setUploadProgress(100);
@@ -146,6 +167,10 @@ export default function SearchPage() {
       onSuccess: (data) => {
         setUploadedFileUrl(null);
         setUlr("");
+        setVendorId("");
+        setVendorName("");
+        setConsignmentId("");
+        setCommodity("");
         setInfoMsg(`Demo reports cleared successfully. Removed ${data.cleared} uploaded record(s).`);
       },
       onError: (err: any) => {
@@ -182,7 +207,31 @@ export default function SearchPage() {
           <div className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6 text-left">
               <div>
-                <label htmlFor="vendor" className="block text-sm font-semibold text-navy mb-2 ml-1">
+                <label htmlFor="vendorId" className="block text-sm font-semibold text-navy mb-2 ml-1">
+                  Vendor ID
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Store className="h-5 w-5 text-muted-foreground group-focus-within:text-trust transition-colors" />
+                  </div>
+                  <input
+                    id="vendorId"
+                    type="text"
+                    className="block w-full pl-11 pr-4 py-4 rounded-xl text-base bg-slate-50/80 border-2 border-border transition-all duration-200 focus:outline-none focus:bg-white focus:border-trust focus:ring-4 focus:ring-trust/10"
+                    placeholder="Enter vendor ID"
+                    value={vendorId}
+                    onChange={(e) => {
+                      setVendorId(e.target.value);
+                      setErrorMsg(null);
+                      setInfoMsg(null);
+                    }}
+                    disabled={verifyMutation.isPending || uploadMutation.isPending || clearReportsMutation.isPending}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="vendorName" className="block text-sm font-semibold text-navy mb-2 ml-1">
                   Vendor Name
                 </label>
                 <div className="relative group">
@@ -190,21 +239,59 @@ export default function SearchPage() {
                     <Store className="h-5 w-5 text-muted-foreground group-focus-within:text-trust transition-colors" />
                   </div>
                   <input
-                    id="vendor"
+                    id="vendorName"
                     type="text"
                     className="block w-full pl-11 pr-4 py-4 rounded-xl text-base bg-slate-50/80 border-2 border-border transition-all duration-200 focus:outline-none focus:bg-white focus:border-trust focus:ring-4 focus:ring-trust/10"
                     placeholder="Enter vendor / supplier name"
-                    value={vendor}
+                    value={vendorName}
                     onChange={(e) => {
-                      setVendor(e.target.value);
+                      setVendorName(e.target.value);
                       setErrorMsg(null);
                       setInfoMsg(null);
                     }}
                     disabled={verifyMutation.isPending || uploadMutation.isPending || clearReportsMutation.isPending}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="consignmentId" className="block text-sm font-semibold text-navy mb-2 ml-1">
+                  Consignment ID
+                </label>
+                <input
+                  id="consignmentId"
+                  type="text"
+                  className="block w-full px-4 py-4 rounded-xl text-base bg-slate-50/80 border-2 border-border transition-all duration-200 focus:outline-none focus:bg-white focus:border-trust focus:ring-4 focus:ring-trust/10"
+                  placeholder="Enter consignment ID"
+                  value={consignmentId}
+                  onChange={(e) => {
+                    setConsignmentId(e.target.value);
+                    setErrorMsg(null);
+                    setInfoMsg(null);
+                  }}
+                  disabled={verifyMutation.isPending || uploadMutation.isPending || clearReportsMutation.isPending}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="commodity" className="block text-sm font-semibold text-navy mb-2 ml-1">
+                  Commodity
+                </label>
+                <input
+                  id="commodity"
+                  type="text"
+                  className="block w-full px-4 py-4 rounded-xl text-base bg-slate-50/80 border-2 border-border transition-all duration-200 focus:outline-none focus:bg-white focus:border-trust focus:ring-4 focus:ring-trust/10"
+                  placeholder="Enter commodity"
+                  value={commodity}
+                  onChange={(e) => {
+                    setCommodity(e.target.value);
+                    setErrorMsg(null);
+                    setInfoMsg(null);
+                  }}
+                  disabled={verifyMutation.isPending || uploadMutation.isPending || clearReportsMutation.isPending}
+                />
                 <p className="mt-2 text-xs text-muted-foreground ml-1">
-                  Vendor is stored with uploaded reports for the demo database.
+                  Vendor and consignment details are stored with uploaded reports for the demo database.
                 </p>
               </div>
 

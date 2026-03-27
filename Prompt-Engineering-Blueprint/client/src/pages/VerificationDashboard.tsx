@@ -121,6 +121,26 @@ export default function VerificationDashboard() {
                     Open Uploaded Report
                   </a>
                 )}
+                {(cert?.vendorId || cert?.vendorName || cert?.consignmentId || cert?.commodity) && (
+                  <div className="pt-4 border-t border-border space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Vendor ID</p>
+                      <p className="text-navy text-sm">{cert?.vendorId || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Vendor Name</p>
+                      <p className="text-navy text-sm">{cert?.vendorName || cert?.vendor || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Consignment ID</p>
+                      <p className="text-navy text-sm">{cert?.consignmentId || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Commodity</p>
+                      <p className="text-navy text-sm">{cert?.commodity || 'N/A'}</p>
+                    </div>
+                  </div>
+                )}
                 <div className="pt-4 border-t border-border">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date Issued</p>
                   <p className="text-navy font-mono text-sm">{cert?.dateIssued ? format(new Date(cert.dateIssued), "MMMM do, yyyy") : 'N/A'}</p>

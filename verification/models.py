@@ -3,6 +3,10 @@ class Report(models.Model):
     file = models.FileField(upload_to="reports/")
     file_hash = models.CharField(max_length=64, unique=True)
     vendor = models.CharField(max_length=255, null=True, blank=True)
+    vendor_id = models.CharField(max_length=100, null=True, blank=True)
+    vendor_name = models.CharField(max_length=255, null=True, blank=True)
+    consignment_id = models.CharField(max_length=100, null=True, blank=True)
+    commodity = models.CharField(max_length=255, null=True, blank=True)
 
     lab_name = models.CharField(max_length=255, null=True, blank=True)
     accreditation_no = models.CharField(max_length=100, null=True, blank=True)

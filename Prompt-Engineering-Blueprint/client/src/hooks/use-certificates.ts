@@ -7,10 +7,18 @@ export type UiCertificate = CertificateResponse & {
   createdAt?: Date | null;
   rejectionReason?: string | null;
   vendor?: string | null;
+  vendorId?: string | null;
+  vendorName?: string | null;
+  consignmentId?: string | null;
+  commodity?: string | null;
 };
 
 type DjangoReportData = {
   vendor?: string | null;
+  vendor_id?: string | null;
+  vendor_name?: string | null;
+  consignment_id?: string | null;
+  commodity?: string | null;
   lab_name: string | null;
   labtype: string | null;
   certificate_no: string | null;
@@ -93,6 +101,10 @@ function normalizeToCertificate(
     id: 0,
     ulr,
     vendor: payload.vendor || null,
+    vendorId: payload.vendor_id || null,
+    vendorName: payload.vendor_name || payload.vendor || null,
+    consignmentId: payload.consignment_id || null,
+    commodity: payload.commodity || null,
     labName: payload.lab_name || "Unknown Laboratory",
     labType: payload.labtype || "N/A",
     certificateNo: payload.certificate_no || "N/A",
@@ -223,10 +235,25 @@ export function useUploadCertificate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, vendor }: { file: File; vendor: string }) => {
+    mutationFn: async ({
+      file,
+      vendorId,
+      vendorName,
+      consignmentId,
+      commodity,
+    }: {
+      file: File;
+      vendorId: string;
+      vendorName: string;
+      consignmentId: string;
+      commodity: string;
+    }) => {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("vendor", vendor);
+      formData.append("vendor_id", vendorId);
+      formData.append("vendor_name", vendorName);
+      formData.append("consignment_id", consignmentId);
+      formData.append("commodity", commodity);
 
       const res = await fetch(djangoUrl("/api/upload/"), {
         method: "POST",

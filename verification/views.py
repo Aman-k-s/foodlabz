@@ -60,6 +60,10 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
     to_date = str(lab.to_date) if lab and lab.to_date else None
     return {
         "vendor": report.vendor,
+        "vendor_id": report.vendor_id,
+        "vendor_name": report.vendor_name,
+        "consignment_id": report.consignment_id,
+        "commodity": report.commodity,
         "lab_name": lab.laboratory_name if lab else report.lab_name,
         "labtype": lab.labtype if lab else None,
         "certificate_no": lab.cert_no if lab else report.accreditation_no,
@@ -109,11 +113,20 @@ class UploadReportView(APIView):
         report = None
         try:
             file = request.FILES.get("file")
-            vendor = (request.data.get("vendor") or "").strip()
+            vendor_id = (request.data.get("vendor_id") or "").strip()
+            vendor_name = (request.data.get("vendor_name") or "").strip()
+            consignment_id = (request.data.get("consignment_id") or "").strip()
+            commodity = (request.data.get("commodity") or "").strip()
             if not file:
                 return Response({"error": "No file uploaded"}, status=400)
-            if not vendor:
-                return Response({"error": "Vendor is required for demo uploads."}, status=400)
+            if not vendor_id:
+                return Response({"error": "Vendor ID is required for demo uploads."}, status=400)
+            if not vendor_name:
+                return Response({"error": "Vendor Name is required for demo uploads."}, status=400)
+            if not consignment_id:
+                return Response({"error": "Consignment ID is required for demo uploads."}, status=400)
+            if not commodity:
+                return Response({"error": "Commodity is required for demo uploads."}, status=400)
             if not str(file.name).lower().endswith(".pdf"):
                 return Response({"error": "Only PDF reports are supported for upload."}, status=400)
 
@@ -128,7 +141,11 @@ class UploadReportView(APIView):
                 )
 
             report = Report(file_hash=file_hash)
-            report.vendor = vendor
+            report.vendor = vendor_name
+            report.vendor_id = vendor_id
+            report.vendor_name = vendor_name
+            report.consignment_id = consignment_id
+            report.commodity = commodity
             report.file = file
             report.status = "PENDING"
             report.rejection_reason = None

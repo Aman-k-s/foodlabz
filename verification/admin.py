@@ -11,7 +11,28 @@ class LabMasterAdmin(admin.ModelAdmin):
 
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
-    list_display = ("id", "vendor", "lab_name", "accreditation_no", "ulr_number", "status", "created_at")
-    search_fields = ("vendor", "lab_name", "accreditation_no", "ulr_number", "file_hash")
+    list_display = (
+        "id",
+        "vendor_id",
+        "vendor_name",
+        "consignment_id",
+        "commodity",
+        "lab_name",
+        "accreditation_no",
+        "ulr_number",
+        "status",
+        "created_at",
+    )
+    search_fields = (
+        "vendor",
+        "vendor_id",
+        "vendor_name",
+        "consignment_id",
+        "commodity",
+        "lab_name",
+        "accreditation_no",
+        "ulr_number",
+        "file_hash",
+    )
     list_filter = ("status", "created_at")
     readonly_fields = ("file_hash", "created_at")
