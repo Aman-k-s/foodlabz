@@ -3,6 +3,7 @@ import { api, buildUrl } from "@shared/routes";
 import type { CertificateResponse } from "@shared/schema";
 
 export type UiCertificate = CertificateResponse & {
+  reportId?: number;
   fileUrl?: string;
   createdAt?: Date | null;
   rejectionReason?: string | null;
@@ -14,6 +15,7 @@ export type UiCertificate = CertificateResponse & {
 };
 
 type DjangoReportData = {
+  id?: number;
   vendor?: string | null;
   vendor_id?: string | null;
   vendor_name?: string | null;
@@ -41,6 +43,9 @@ type DjangoEnvelope = {
 type DjangoListEnvelope = {
   success: boolean;
   data: DjangoReportData[];
+  count?: number;
+  page?: number;
+  page_size?: number;
 };
 
 export type LabDirectoryItem = {
@@ -99,6 +104,7 @@ function normalizeToCertificate(
 
   return {
     id: 0,
+    reportId: payload.id || 0,
     ulr,
     vendor: payload.vendor || null,
     vendorId: payload.vendor_id || null,
@@ -124,6 +130,13 @@ function normalizeToCertificate(
     rejectionReason: payload.rejection_reason || null,
   };
 }
+
+export type ReportsTableResponse = {
+  items: UiCertificate[];
+  count: number;
+  page: number;
+  pageSize: number;
+};
 
 export function useCertificates() {
   return useQuery({
@@ -173,6 +186,35 @@ export function useUploadedReports() {
       if (!res.ok) throw new Error("Failed to fetch uploaded reports");
       const body = (await res.json()) as DjangoListEnvelope;
       return body.data.map((item) => normalizeToCertificate(item));
+    },
+    retry: false,
+  });
+}
+
+export function useReportsTable(query: string, status: string, page: number, pageSize = 25) {
+  return useQuery({
+    queryKey: ["django-reports-table", query, status, page, pageSize],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (query.trim()) {
+        params.set("q", query.trim());
+      }
+      if (status.trim()) {
+        params.set("status", status.trim());
+      }
+
+      const res = await fetch(djangoUrl(`/api/reports/?${params.toString()}`));
+      if (!res.ok) throw new Error("Failed to fetch reports");
+      const body = (await res.json()) as DjangoListEnvelope;
+      return {
+        items: body.data.map((item) => normalizeToCertificate(item)),
+        count: body.count ?? body.data.length,
+        page: body.page ?? page,
+        pageSize: body.page_size ?? pageSize,
+      } satisfies ReportsTableResponse;
     },
     retry: false,
   });

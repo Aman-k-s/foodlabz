@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useClearUploadedReports, useVerifyCertificate, useUploadCertificate } from "@/hooks/use-certificates";
-import { ShieldCheck, Search, ArrowRight, Loader2, Upload, MapPinned, Store, Trash2 } from "lucide-react";
+import { ShieldCheck, Search, ArrowRight, Loader2, Upload, MapPinned, Store, Trash2, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import { BrandLogo } from "@/components/common/BrandLogo";
 
@@ -456,6 +456,14 @@ export default function SearchPage() {
               >
                 <MapPinned className="w-4 h-4" />
                 View Labs Map
+              </Link>
+              <span className="hidden sm:inline text-muted-foreground">|</span>
+              <Link
+                href="/reports"
+                className="inline-flex items-center gap-2 text-trust hover:text-navy transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                View Reports
               </Link>
             </div>
             <button

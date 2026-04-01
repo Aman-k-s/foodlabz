@@ -9,6 +9,7 @@ import SearchPage from "@/pages/SearchPage";
 import VerificationDashboard from "@/pages/VerificationDashboard";
 import LabsDirectoryPage from "@/pages/LabsDirectoryPage";
 import LabsMapPage from "@/pages/LabsMapPage";
+import ReportsPage from "@/pages/ReportsPage";
 
 function Router() {
   return (
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/dashboard" component={SearchPage} />
       <Route path="/dashboard/" component={SearchPage} />
       <Route path="/labs" component={LabsDirectoryPage} />
+      <Route path="/reports" component={ReportsPage} />
       <Route path="/labs/map/all" component={LabsMapPage} />
       <Route path="/labs/map" component={LabsMapPage} />
       <Route path="/dashboard/:ulr" component={VerificationDashboard} />

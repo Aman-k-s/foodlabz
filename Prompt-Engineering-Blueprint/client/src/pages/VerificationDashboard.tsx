@@ -169,6 +169,11 @@ export default function VerificationDashboard() {
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Certificate Number</p>
                   <p className="text-navy font-mono font-medium text-lg">{cert?.certificateNo || 'N/A'}</p>
                 </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ULR Number</p>
+                  <p className="text-navy font-mono font-medium text-lg break-all">{cert?.ulr || ulr || 'N/A'}</p>
+                </div>
                 
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</p>

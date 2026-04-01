@@ -1,4 +1,4 @@
-import { MapPinned, Search } from "lucide-react";
+import { FileText, MapPinned, Search } from "lucide-react";
 import { Link } from "wouter";
 import { BrandLogo } from "@/components/common/BrandLogo";
 
@@ -25,6 +25,10 @@ export function Navbar() {
           <Link href="/labs/map/all" className="text-sm font-medium text-muted-foreground hover:text-navy transition-colors flex items-center gap-2">
             <MapPinned className="w-4 h-4" />
             View Labs Map
+          </Link>
+          <Link href="/reports" className="text-sm font-medium text-muted-foreground hover:text-navy transition-colors flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            View Reports
           </Link>
           <div className="h-4 w-px bg-border"></div>
           <div className="flex items-center gap-2">

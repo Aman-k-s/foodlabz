@@ -59,6 +59,7 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
     issue_date = str(lab.issue_date) if lab and lab.issue_date else None
     to_date = str(lab.to_date) if lab and lab.to_date else None
     return {
+        "id": report.id,
         "vendor": report.vendor,
         "vendor_id": report.vendor_id,
         "vendor_name": report.vendor_name,
@@ -230,12 +231,50 @@ class ReportByUlrView(APIView):
 
 class UploadedReportsView(APIView):
     def get(self, request):
-        reports = Report.objects.order_by("-created_at")[:100]
+        query = (request.GET.get("q") or "").strip()
+        status_filter = (request.GET.get("status") or "").strip()
+        try:
+            page = int(request.GET.get("page", 1))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(request.GET.get("page_size", 25))
+        except ValueError:
+            page_size = 25
+
+        page = max(page, 1)
+        page_size = max(1, min(page_size, 100))
+
+        reports = Report.objects.order_by("-created_at")
+        if query:
+            reports = reports.filter(
+                Q(vendor_id__icontains=query)
+                | Q(vendor_name__icontains=query)
+                | Q(consignment_id__icontains=query)
+                | Q(commodity__icontains=query)
+                | Q(lab_name__icontains=query)
+                | Q(accreditation_no__icontains=query)
+                | Q(ulr_number__icontains=query)
+                | Q(status__icontains=query)
+            )
+        if status_filter:
+            reports = reports.filter(status__iexact=status_filter)
+
+        paginator = Paginator(reports, page_size)
+        page_obj = paginator.get_page(page)
         data = []
-        for report in reports:
+        for report in page_obj.object_list:
             lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
             data.append(_serialize_report(request=request, report=report, lab=lab))
-        return Response({"success": True, "data": data})
+        return Response(
+            {
+                "success": True,
+                "data": data,
+                "count": paginator.count,
+                "page": page_obj.number,
+                "page_size": page_size,
+            }
+        )
 
 
 class ClearUploadedReportsView(APIView):
