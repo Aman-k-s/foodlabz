@@ -18,6 +18,7 @@ from .utils import (
     find_lab_match,
     generate_file_hash,
     normalize_ulr,
+    ULR_STRICT_NORMALIZED_PATTERN,
     validate_report,
 )
 
@@ -123,7 +124,11 @@ def _process_uploaded_report(report_id):
         extracted = extract_fields(text)
 
         report.accreditation_no = extracted.get("certificate_no")
-        report.ulr_number = normalize_ulr(extracted.get("ulr"))
+        extracted_ulr = normalize_ulr(extracted.get("ulr"))
+        if extracted_ulr and ULR_STRICT_NORMALIZED_PATTERN.match(extracted_ulr):
+            report.ulr_number = extracted_ulr
+        else:
+            report.ulr_number = None
 
         if report.ulr_number:
             duplicate_report = (
@@ -254,15 +259,19 @@ class ReportByIdView(APIView):
         if report.accreditation_no or report.ulr_number:
             lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
 
-        # Backfill ULR for older reports where extraction missed due to strict patterns.
-        # This keeps the dashboard from showing N/A when the PDF clearly contains a ULR.
+        # If an older report has a non-ULR garbage value saved, drop it and attempt a best-effort re-extract.
+        if report.ulr_number and not ULR_STRICT_NORMALIZED_PATTERN.match(normalize_ulr(report.ulr_number) or ""):
+            report.ulr_number = None
+            report.save(update_fields=["ulr_number"])
+
+        # Backfill ULR for older reports where extraction missed due to earlier strict patterns.
         if not report.ulr_number and report.file and report.status != "PROCESSING":
             try:
                 file_path = report.file.path
                 text = extract_text_from_pdf(file_path)
                 extracted = extract_fields(text)
                 extracted_ulr = normalize_ulr(extracted.get("ulr"))
-                if extracted_ulr:
+                if extracted_ulr and ULR_STRICT_NORMALIZED_PATTERN.match(extracted_ulr):
                     report.ulr_number = extracted_ulr
                     report.save(update_fields=["ulr_number"])
             except Exception:

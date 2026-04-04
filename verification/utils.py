@@ -33,6 +33,7 @@ ULR_SEQUENCE_PATTERN = re.compile(
     # - followed by at least 8 more alphanumeric chars (optionally spaced/hyphenated)
     r"\b(?:TC|CC|RC)[\s\-]?\d{4,6}(?:[\s\-]?[A-Z0-9]){8,24}\b"
 )
+ULR_STRICT_NORMALIZED_PATTERN = re.compile(r"^(TC|CC|RC)\d{4,6}[A-Z0-9]{8,24}$")
 DATE_PATTERNS = [
     re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),
     re.compile(r"\b\d{1,2}\s+[A-Z]{3,9}\s+\d{2,4}\b"),
@@ -472,29 +473,25 @@ def extract_fields(text):
         if cert_match:
             certificate_no = f"{cert_match.group(1)}-{cert_match.group(2)}"
 
-    ulr = None
-    label_match = ULR_LABEL_PATTERN.search(clean_text)
-    if label_match:
-        candidate = label_match.group(1)
-        sequence_match = ULR_SEQUENCE_PATTERN.search(candidate)
-        if sequence_match:
-            ulr = normalize_ulr(sequence_match.group(0))
-        else:
-            ulr = normalize_ulr(candidate)
-
     def _finalize_ulr(value):
         if not value:
             return None
         normalized = normalize_ulr(value)
         if not normalized:
             return None
-        if len(normalized) > 18:
-            normalized = normalized[:18]
-        if len(normalized) < 12:
+        # Only accept values that look like real ULRs (prefix + digits + tail),
+        # otherwise OCR noise like "NOLABREF..." can be incorrectly captured.
+        if not ULR_STRICT_NORMALIZED_PATTERN.match(normalized):
             return None
         return normalized
 
-    ulr = _finalize_ulr(ulr)
+    ulr = None
+    label_match = ULR_LABEL_PATTERN.search(clean_text)
+    if label_match:
+        candidate = label_match.group(1)
+        sequence_match = ULR_SEQUENCE_PATTERN.search(candidate)
+        if sequence_match:
+            ulr = _finalize_ulr(sequence_match.group(0))
 
     if not ulr:
         sequence_match = ULR_SEQUENCE_PATTERN.search(clean_text)
