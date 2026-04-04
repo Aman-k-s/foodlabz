@@ -20,6 +20,11 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _normalize_origin(value: str) -> str:
+    normalized = (value or "").strip().rstrip("/")
+    return normalized
+
+
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "django-insecure-uoy#h@snbrdou@ce(^fbk7xmw)ffoi25^8nr^^vn5x(vwp_$t3",
@@ -111,7 +116,11 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
-CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+CORS_ALLOWED_ORIGINS = [
+    origin
+    for origin in (_normalize_origin(item) for item in cors_origins_env.split(","))
+    if origin
+]
 
 cors_allow_all_env = os.getenv("CORS_ALLOW_ALL_ORIGINS")
 if cors_allow_all_env is not None:
