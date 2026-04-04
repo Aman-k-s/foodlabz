@@ -25,10 +25,13 @@ CERT_LINE_PATTERN = re.compile(
     r"^\s*(T\s*C|C\s*C|R\s*C)\s*[-\u2010\u2011\u2012\u2013\u2014]?\s*((?:\d\s*){4,6})\s*$"
 )
 ULR_LABEL_PATTERN = re.compile(
-    r"\bU\s*L\s*R(?:\s*(?:NO|NO\.|NUMBER))?[:\s\-]*([A-Z0-9\s\-/]{10,32})\b"
+    r"\bU\s*L\s*R(?:\s*(?:NO|NO\.|NUMBER))?[:\s\-]*([A-Z0-9\s\-/:.]{10,48})\b"
 )
 ULR_SEQUENCE_PATTERN = re.compile(
-    r"\b(?:TC|CC|RC)[\s\-]?\d{3,6}[\s\-]?\d{2}[0-9A-F][0-9A-F]{8}[FP]\b"
+    # ULR formats vary in the wild (and OCR adds noise). We accept:
+    # - the certificate prefix + digits (TC/CC/RC + 4-6 digits)
+    # - followed by at least 8 more alphanumeric chars (optionally spaced/hyphenated)
+    r"\b(?:TC|CC|RC)[\s\-]?\d{4,6}(?:[\s\-]?[A-Z0-9]){8,24}\b"
 )
 DATE_PATTERNS = [
     re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),
@@ -478,21 +481,31 @@ def extract_fields(text):
             ulr = normalize_ulr(sequence_match.group(0))
         else:
             ulr = normalize_ulr(candidate)
-            if ulr and len(ulr) > 18:
-                ulr = ulr[:18]
-            if ulr and len(ulr) < 12:
-                ulr = None
+
+    def _finalize_ulr(value):
+        if not value:
+            return None
+        normalized = normalize_ulr(value)
+        if not normalized:
+            return None
+        if len(normalized) > 18:
+            normalized = normalized[:18]
+        if len(normalized) < 12:
+            return None
+        return normalized
+
+    ulr = _finalize_ulr(ulr)
 
     if not ulr:
         sequence_match = ULR_SEQUENCE_PATTERN.search(clean_text)
         if sequence_match:
-            ulr = normalize_ulr(sequence_match.group(0))
+            ulr = _finalize_ulr(sequence_match.group(0))
 
     if not ulr and certificate_no:
         cert_clean = certificate_no.replace("-", "")
         ulr_match = re.search(rf"\b{cert_clean}[A-Z0-9]{{8,}}\b", clean_text)
         if ulr_match:
-            ulr = normalize_ulr(ulr_match.group(0))
+            ulr = _finalize_ulr(ulr_match.group(0))
 
     if not certificate_no and ulr:
         certificate_no = _cert_from_ulr_fallback(ulr)

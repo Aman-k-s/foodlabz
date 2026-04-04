@@ -254,6 +254,21 @@ class ReportByIdView(APIView):
         if report.accreditation_no or report.ulr_number:
             lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
 
+        # Backfill ULR for older reports where extraction missed due to strict patterns.
+        # This keeps the dashboard from showing N/A when the PDF clearly contains a ULR.
+        if not report.ulr_number and report.file and report.status != "PROCESSING":
+            try:
+                file_path = report.file.path
+                text = extract_text_from_pdf(file_path)
+                extracted = extract_fields(text)
+                extracted_ulr = normalize_ulr(extracted.get("ulr"))
+                if extracted_ulr:
+                    report.ulr_number = extracted_ulr
+                    report.save(update_fields=["ulr_number"])
+            except Exception:
+                # Best-effort only: never fail the request because of backfill.
+                pass
+
         return Response(
             {
                 "success": True,
