@@ -59,6 +59,7 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
     valid_till = (lab.extend_date or lab.to_date) if lab else None
     issue_date = str(lab.issue_date) if lab and lab.issue_date else None
     to_date = str(lab.to_date) if lab and lab.to_date else None
+    ulr_number = report.ulr_number or (lab.ulr_number if lab else None)
     return {
         "id": report.id,
         "vendor": report.vendor,
@@ -69,7 +70,7 @@ def _serialize_report(request, report, lab, extracted_issue_date=None, extracted
         "lab_name": lab.laboratory_name if lab else report.lab_name,
         "labtype": lab.labtype if lab else None,
         "certificate_no": lab.cert_no if lab else report.accreditation_no,
-        "ulr_number": report.ulr_number,
+        "ulr_number": ulr_number,
         "status": report.status,
         "rejection_reason": report.rejection_reason,
         "issue_date": issue_date,
@@ -151,6 +152,8 @@ def _process_uploaded_report(report_id):
         if lab:
             report.lab_name = lab.laboratory_name
             report.accreditation_no = lab.cert_no
+            if not report.ulr_number and lab.ulr_number:
+                report.ulr_number = normalize_ulr(lab.ulr_number)
 
         report.save()
     except Exception as exc:
