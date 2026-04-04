@@ -37,13 +37,14 @@ case \"${CLEAR_REPORTS}\" in \
   *) \
     echo 'Skipping report cleanup' ;; \
 esac && \
+python manage.py seed_labs file1.xlsx && \
 echo \"RUN_LAB_IMPORT=${RUN_LAB_IMPORT}\" && \
 case \"${RUN_LAB_IMPORT}\" in \
   true|TRUE|True|1) \
     echo 'Starting one-time lab import from file1.xlsx' && \
-    python manage.py shell -c \"from verification.import_labs import import_labs_from_excel; import_labs_from_excel('file1.xlsx')\" ;; \
+    python manage.py import_labs file1.xlsx ;; \
   *) \
-    echo 'Skipping lab import' ;; \
+    echo 'Skipping forced lab import' ;; \
 esac && \
 gunicorn config.wsgi:application \
   --bind 0.0.0.0:${PORT:-10000} \

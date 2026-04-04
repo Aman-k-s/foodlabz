@@ -232,8 +232,9 @@ export default function LabsMapPage() {
             <div className="h-[70vh] w-full rounded-2xl overflow-hidden border border-white/70 shadow-inner">
               <MapContainer center={[20.5937, 78.9629]} zoom={4} className="h-full w-full">
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                  subdomains={["a", "b", "c", "d"]}
                 />
                 {points.map((point) => (
                   <Marker key={point.key} position={[point.lat, point.lng]} icon={defaultMarkerIcon}>
