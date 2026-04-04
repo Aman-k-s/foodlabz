@@ -15,9 +15,9 @@ def _frontend_path(*parts):
     return (settings.FRONTEND_DIST_DIR.joinpath(*parts)).resolve()
 
 
-def _serve_frontend_file(file_path):
+def _serve_frontend_file(*parts):
     dist_root = settings.FRONTEND_DIST_DIR.resolve()
-    requested = _frontend_path(file_path)
+    requested = _frontend_path(*parts)
     if dist_root not in requested.parents and requested != dist_root:
         raise Http404("File not found")
     if not requested.exists() or not requested.is_file():
@@ -43,6 +43,10 @@ def frontend_asset(request, file_path):
     return _serve_frontend_file("assets", file_path)
 
 
+def frontend_public_file(request, file_path):
+    return _serve_frontend_file(file_path)
+
+
 def favicon(request):
     try:
         return _serve_frontend_file("favicon.png")
@@ -57,12 +61,12 @@ urlpatterns = [
     path("", home),
     path("favicon.ico", favicon),
     path("assets/<path:file_path>", frontend_asset),
-    path("foodlabz-logo.png", frontend_asset, {"file_path": "foodlabz-logo.png"}),
-    path("favicon.png", frontend_asset, {"file_path": "favicon.png"}),
+    path("foodlabz-logo.png", frontend_public_file, {"file_path": "foodlabz-logo.png"}),
+    path("favicon.png", frontend_public_file, {"file_path": "favicon.png"}),
     path("admin/", admin.site.urls),
     path("api/", include("verification.urls")),
     re_path(r"^(?!api/|admin/|assets/|favicon\.ico$|favicon\.png$|foodlabz-logo\.png$).*$", home),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

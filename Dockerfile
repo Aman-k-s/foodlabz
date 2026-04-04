@@ -28,6 +28,7 @@ COPY . .
 COPY --from=frontend-build /frontend/dist/public ./frontend_dist
 
 CMD sh -c "python manage.py migrate && \
+python manage.py collectstatic --noinput && \
 echo \"CLEAR_REPORTS=${CLEAR_REPORTS}\" && \
 case \"${CLEAR_REPORTS}\" in \
   true|TRUE|True|1) \
