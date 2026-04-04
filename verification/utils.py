@@ -9,6 +9,11 @@ import pytesseract
 from pdf2image import convert_from_path
 from django.utils import timezone
 
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
 from .models import LabMaster, Report
 
 _tesseract_cmd = os.getenv("TESSERACT_CMD")
@@ -73,11 +78,13 @@ def _remaining_seconds(deadline):
 
 
 def extract_text_from_pdf(pdf_path):
-    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 55, 20, 90)
+    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 30, 12, 90)
     deadline = time.monotonic() + total_timeout_seconds
 
-    pdftotext_timeout = min(_env_int_clamped("PDFTOTEXT_TIMEOUT_SECONDS", 10, 4, 15), _remaining_seconds(deadline))
-    text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
+    text = _extract_text_with_pypdf(pdf_path) or ""
+    if not text:
+        pdftotext_timeout = min(_env_int_clamped("PDFTOTEXT_TIMEOUT_SECONDS", 8, 3, 15), _remaining_seconds(deadline))
+        text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
 
     # Certificate number is often printed as an image label below the NABL logo.
     # Keep OCR on page 1 as a light supplement even when pdftotext succeeds.
@@ -99,6 +106,27 @@ def extract_text_from_pdf(pdf_path):
     if page1_ocr_text:
         return page1_ocr_text
     return ""
+
+
+def _extract_text_with_pypdf(pdf_path):
+    if PdfReader is None:
+        return None
+    try:
+        reader = PdfReader(pdf_path)
+    except Exception:
+        return None
+
+    parts = []
+    for page in reader.pages[:3]:
+        try:
+            page_text = page.extract_text() or ""
+        except Exception:
+            page_text = ""
+        if page_text.strip():
+            parts.append(page_text)
+
+    combined = "\n".join(parts).strip()
+    return combined or None
 
 
 def _extract_text_with_pdftotext(pdf_path, timeout_seconds=20):

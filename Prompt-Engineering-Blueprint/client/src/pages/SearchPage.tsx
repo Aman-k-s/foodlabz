@@ -115,13 +115,16 @@ export default function SearchPage() {
             return;
           }
 
+          if (data.reportId) {
+            setInfoMsg("Upload received. Processing the report now...");
+            setLocation(`/dashboard/report/${data.reportId}`);
+            return;
+          }
+
           if (data.fileUrl) {
             setUploadedFileUrl(data.fileUrl);
           }
-          setErrorMsg(
-            data.rejectionReason ||
-              "Upload completed, but ULR/certificate number could not be extracted from this report.",
-          );
+          setErrorMsg(data.rejectionReason || "Upload completed, but report tracking could not be started.");
         },
         onError: (err: any) => {
           setUploadProgress(0);

@@ -134,7 +134,7 @@ export default function LabsMapPage() {
       setSkipped(0);
       const nextPoints: GeoPoint[] = [];
 
-      for (const [key, place] of groupedPlaces) {
+      for (const [key, place] of Array.from(groupedPlaces.entries())) {
         if (cancelled) return;
 
         const cached = loadCache(key);

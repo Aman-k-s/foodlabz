@@ -191,6 +191,26 @@ export function useUploadedReports() {
   });
 }
 
+export function useReportById(reportId: number | null) {
+  return useQuery({
+    queryKey: ["django-report-by-id", reportId],
+    queryFn: async () => {
+      const res = await fetch(djangoUrl(`/api/reports/${reportId}/`));
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to fetch uploaded report");
+      const body = (await res.json()) as DjangoEnvelope;
+      return normalizeToCertificate(body.data);
+    },
+    enabled: !!reportId,
+    retry: false,
+    refetchInterval: (query) => {
+      const report = query.state.data as UiCertificate | null | undefined;
+      if (!report) return 2500;
+      return report.status === "PROCESSING" || report.status === "PENDING" ? 2500 : false;
+    },
+  });
+}
+
 export function useReportsTable(query: string, status: string, page: number, pageSize = 25) {
   return useQuery({
     queryKey: ["django-reports-table", query, status, page, pageSize],
@@ -269,6 +289,7 @@ export function useVerifyCertificate() {
     onSuccess: (data) => {
       queryClient.setQueryData([api.certificates.getByUlr.path, data.ulr], data);
       queryClient.invalidateQueries({ queryKey: ["django-uploaded-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["django-reports-table"] });
     },
   });
 }
@@ -333,6 +354,7 @@ export function useUploadCertificate() {
     onSuccess: (data) => {
       queryClient.setQueryData([api.certificates.getByUlr.path, data.ulr], data);
       queryClient.invalidateQueries({ queryKey: ["django-uploaded-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["django-reports-table"] });
     },
   });
 }
@@ -352,6 +374,7 @@ export function useClearUploadedReports() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["django-uploaded-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["django-reports-table"] });
       queryClient.removeQueries({ queryKey: [api.certificates.getByUlr.path] });
     },
   });

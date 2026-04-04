@@ -1,5 +1,6 @@
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 from django.conf import settings
@@ -109,9 +110,65 @@ def _extract_text_from_uploaded_pdf(file_obj):
             os.remove(temp_path)
 
 
+def _process_uploaded_report(report_id):
+    try:
+        report = Report.objects.get(id=report_id)
+    except Report.DoesNotExist:
+        return
+
+    try:
+        file_path = report.file.path
+        text = extract_text_from_pdf(file_path)
+        extracted = extract_fields(text)
+
+        report.accreditation_no = extracted.get("certificate_no")
+        report.ulr_number = normalize_ulr(extracted.get("ulr"))
+
+        if report.ulr_number:
+            duplicate_report = (
+                Report.objects.filter(ulr_number__iexact=report.ulr_number)
+                .exclude(id=report.id)
+                .order_by("-created_at")
+                .first()
+            )
+            if duplicate_report:
+                _reject_report(
+                    report,
+                    "This ULR number has already been uploaded in the demo database. Clear demo reports to upload it again.",
+                )
+                return
+
+        upload_date = timezone.localdate()
+        lab, status, rejection_reason = validate_report(
+            extracted,
+            report_id=report.id,
+            upload_date=upload_date,
+        )
+        report.status = status
+        report.validation_score = 100 if status == "VALID" else 0
+        report.rejection_reason = rejection_reason
+
+        if lab:
+            report.lab_name = lab.laboratory_name
+            report.accreditation_no = lab.cert_no
+
+        report.save()
+    except Exception as exc:
+        _reject_report(report, str(exc))
+
+
+def _start_report_processing(report_id):
+    worker = threading.Thread(
+        target=_process_uploaded_report,
+        args=(report_id,),
+        daemon=True,
+        name=f"report-processor-{report_id}",
+    )
+    worker.start()
+
+
 class UploadReportView(APIView):
     def post(self, request):
-        report = None
         try:
             file = request.FILES.get("file")
             vendor_id = (request.data.get("vendor_id") or "").strip()
@@ -148,64 +205,19 @@ class UploadReportView(APIView):
             report.consignment_id = consignment_id
             report.commodity = commodity
             report.file = file
-            report.status = "PENDING"
+            report.status = "PROCESSING"
             report.rejection_reason = None
             report.save()
+            _start_report_processing(report.id)
 
-            text = _extract_text_from_uploaded_pdf(file)
-            extracted = extract_fields(text)
-
-            report.accreditation_no = extracted.get("certificate_no")
-            report.ulr_number = normalize_ulr(extracted.get("ulr"))
-
-            if report.ulr_number:
-                duplicate_report = Report.objects.filter(ulr_number__iexact=report.ulr_number).order_by("-created_at").first()
-                if duplicate_report:
-                    return Response(
-                        {
-                            "error": "This ULR number has already been uploaded in the demo database. Clear demo reports to upload it again."
-                        },
-                        status=400,
-                    )
-
-            upload_date = timezone.localdate()
-            lab, status, rejection_reason = validate_report(
-                extracted,
-                report_id=report.id,
-                upload_date=upload_date,
-            )
-            report.status = status
-            report.validation_score = 100 if status == "VALID" else 0
-            report.rejection_reason = rejection_reason
-
-            if lab:
-                report.lab_name = lab.laboratory_name
-                report.accreditation_no = lab.cert_no
-            report.save()
-
-            return Response(
-                {
-                    "success": True,
-                    "data": _serialize_report(
-                        request=request,
-                        report=report,
-                        lab=lab,
-                        extracted_issue_date=extracted.get("issue_date"),
-                        extracted_to_date=extracted.get("to_date"),
-                    ),
-                }
-            )
-        except Exception as e:
-            if not report:
-                return Response({"error": _trim_reason(str(e))}, status=500)
-
-            _reject_report(report, str(e))
             return Response(
                 {
                     "success": True,
                     "data": _serialize_report(request=request, report=report, lab=None),
                 }
             )
+        except Exception as e:
+            return Response({"error": _trim_reason(str(e))}, status=500)
 
 
 class ReportByUlrView(APIView):
@@ -220,6 +232,24 @@ class ReportByUlrView(APIView):
 
         lab = None
         lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
+
+        return Response(
+            {
+                "success": True,
+                "data": _serialize_report(request=request, report=report, lab=lab),
+            }
+        )
+
+
+class ReportByIdView(APIView):
+    def get(self, request, report_id):
+        report = Report.objects.filter(id=report_id).first()
+        if not report:
+            return Response({"message": "Report does not exist."}, status=404)
+
+        lab = None
+        if report.accreditation_no or report.ulr_number:
+            lab, _ = find_lab_match(cert_no=report.accreditation_no, ulr=report.ulr_number)
 
         return Response(
             {

@@ -1,5 +1,6 @@
-import { useRoute } from "wouter";
-import { useCertificateByUlr } from "@/hooks/use-certificates";
+import { useEffect } from "react";
+import { useLocation, useRoute } from "wouter";
+import { useCertificateByUlr, useReportById } from "@/hooks/use-certificates";
 import { Navbar } from "@/components/layout/Navbar";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -9,10 +10,25 @@ import {
 } from "lucide-react";
 
 export default function VerificationDashboard() {
-  const [, params] = useRoute("/dashboard/:ulr");
-  const ulr = params?.ulr || "";
-  
-  const { data: cert, isLoading, isError } = useCertificateByUlr(ulr);
+  const [, ulrParams] = useRoute("/dashboard/:ulr");
+  const [, reportParams] = useRoute("/dashboard/report/:reportId");
+  const [, setLocation] = useLocation();
+  const ulr = ulrParams?.ulr || "";
+  const reportId = reportParams?.reportId ? Number(reportParams.reportId) : null;
+  const isReportRoute = Number.isFinite(reportId) && reportId !== null;
+
+  const reportQuery = useReportById(isReportRoute ? reportId : null);
+  const ulrQuery = useCertificateByUlr(!isReportRoute ? ulr : "");
+  const cert = isReportRoute ? reportQuery.data : ulrQuery.data;
+  const isLoading = isReportRoute ? reportQuery.isLoading : ulrQuery.isLoading;
+  const isError = isReportRoute ? reportQuery.isError : ulrQuery.isError;
+  const isProcessing = cert?.status === "PROCESSING" || cert?.status === "PENDING";
+
+  useEffect(() => {
+    if (isReportRoute && cert?.ulr && !isProcessing) {
+      setLocation(`/dashboard/${encodeURIComponent(cert.ulr)}`, { replace: true });
+    }
+  }, [cert?.ulr, isProcessing, isReportRoute, setLocation]);
 
   if (isLoading) {
     return (
@@ -25,6 +41,56 @@ export default function VerificationDashboard() {
             <FileText className="w-6 h-6 text-trust" />
           </div>
           <p className="text-navy font-semibold animate-pulse">Running Compliance Verification Protocol...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isReportRoute && cert && isProcessing) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full bg-white rounded-2xl p-8 border border-border shadow-xl text-center">
+            <div className="relative w-16 h-16 flex items-center justify-center mx-auto mb-5">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-trust border-t-transparent animate-spin"></div>
+              <FileText className="w-6 h-6 text-trust" />
+            </div>
+            <h2 className="text-2xl font-bold text-navy mb-3 font-display">Processing Uploaded Report</h2>
+            <p className="text-muted-foreground mb-6">
+              We received your PDF and started the full OCR and validation pipeline. This page refreshes automatically and will open the final dashboard as soon as the ULR is extracted.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left bg-slate-50 rounded-xl p-4 border border-border/60">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Report ID</p>
+                <p className="text-navy font-mono">{cert.reportId || reportId}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Status</p>
+                <p className="text-navy font-semibold">{cert.status}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Vendor Name</p>
+                <p className="text-navy">{cert.vendorName || cert.vendor || "N/A"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Commodity</p>
+                <p className="text-navy">{cert.commodity || "N/A"}</p>
+              </div>
+            </div>
+            {cert.fileUrl && (
+              <a
+                href={cert.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-trust hover:text-navy transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open Uploaded Report
+              </a>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -59,7 +125,7 @@ export default function VerificationDashboard() {
   const isNotFound = !cert;
   const isPassed = cert?.status === "VALID";
   const failureReason = isNotFound
-    ? `ULR ${ulr} does not match any uploaded record.`
+    ? (isReportRoute ? `Report ${reportId} does not exist or is no longer available.` : `ULR ${ulr} does not match any uploaded record.`)
     : (cert?.rejectionReason || "Validation failed.");
 
   return (

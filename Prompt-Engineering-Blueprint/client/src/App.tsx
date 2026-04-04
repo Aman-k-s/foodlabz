@@ -17,6 +17,7 @@ function Router() {
       <Route path="/" component={SearchPage} />
       <Route path="/dashboard" component={SearchPage} />
       <Route path="/dashboard/" component={SearchPage} />
+      <Route path="/dashboard/report/:reportId" component={VerificationDashboard} />
       <Route path="/labs" component={LabsDirectoryPage} />
       <Route path="/reports" component={ReportsPage} />
       <Route path="/labs/map/all" component={LabsMapPage} />

@@ -22,6 +22,8 @@ function statusClass(status: string | null | undefined) {
       return "bg-emerald-100 text-emerald-700";
     case "REJECTED":
       return "bg-rose-100 text-rose-700";
+    case "PROCESSING":
+      return "bg-sky-100 text-sky-700";
     case "PENDING":
       return "bg-amber-100 text-amber-700";
     default:
@@ -84,6 +86,7 @@ export default function ReportsPage() {
                 <option value="">All statuses</option>
                 <option value="VALID">VALID</option>
                 <option value="REJECTED">REJECTED</option>
+                <option value="PROCESSING">PROCESSING</option>
                 <option value="PENDING">PENDING</option>
               </select>
             </div>
@@ -154,6 +157,13 @@ export default function ReportsPage() {
                             className="inline-flex items-center rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-navy hover:bg-slate-50"
                           >
                             View Details
+                          </Link>
+                        ) : report.reportId ? (
+                          <Link
+                            href={`/dashboard/report/${report.reportId}`}
+                            className="inline-flex items-center rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-navy hover:bg-slate-50"
+                          >
+                            View Progress
                           </Link>
                         ) : null}
                         {report.fileUrl ? (
