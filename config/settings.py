@@ -4,6 +4,7 @@ Django settings for config project.
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import dj_database_url
@@ -25,16 +26,24 @@ def _normalize_origin(value: str) -> str:
     return normalized
 
 
+def _normalize_host(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"//{raw}")
+    return (parsed.hostname or raw).strip().rstrip("/")
+
+
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "django-insecure-uoy#h@snbrdou@ce(^fbk7xmw)ffoi25^8nr^^vn5x(vwp_$t3",
 )
 DEBUG = _env_bool("DJANGO_DEBUG", True)
 
-default_hosts = ["127.0.0.1", "localhost", ".ngrok-free.dev", ".ngrok-free.app"]
+default_hosts = ["127.0.0.1", "localhost", ".ngrok-free.dev", ".ngrok-free.app", "foodlabz.coolify.qualix.ai"]
 allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if allowed_hosts_env:
-    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+    ALLOWED_HOSTS = [host for host in (_normalize_host(item) for item in allowed_hosts_env.split(",")) if host]
 else:
     ALLOWED_HOSTS = default_hosts
 
