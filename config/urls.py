@@ -40,7 +40,7 @@ def home(request):
 
 
 def frontend_asset(request, file_path):
-    return _serve_frontend_file(file_path)
+    return _serve_frontend_file("assets", file_path)
 
 
 def favicon(request):
