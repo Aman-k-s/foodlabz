@@ -1,3 +1,14 @@
+FROM node:20-slim AS frontend-build
+
+WORKDIR /frontend
+
+COPY Prompt-Engineering-Blueprint/package*.json ./
+RUN npm ci
+
+COPY Prompt-Engineering-Blueprint/ ./
+RUN npm run build
+
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,6 +25,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+COPY --from=frontend-build /frontend/dist/public ./frontend_dist
 
 CMD sh -c "python manage.py migrate && \
 echo \"CLEAR_REPORTS=${CLEAR_REPORTS}\" && \

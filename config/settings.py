@@ -12,6 +12,7 @@ except ModuleNotFoundError:  # local env fallback when package is not installed 
     dj_database_url = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIST_DIR = BASE_DIR / "frontend_dist"
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
