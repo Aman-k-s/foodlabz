@@ -28,12 +28,16 @@ ULR_LABEL_PATTERN = re.compile(
     r"\bU\s*L\s*R(?:\s*(?:NO|NO\.|NUMBER))?[:\s\-]*([A-Z0-9\s\-/:.]{10,48})\b"
 )
 ULR_SEQUENCE_PATTERN = re.compile(
-    # ULR formats vary in the wild (and OCR adds noise). We accept:
-    # - the certificate prefix + digits (TC/CC/RC + 4-6 digits)
-    # - followed by at least 8 more alphanumeric chars (optionally spaced/hyphenated)
-    r"\b(?:TC|CC|RC)[\s\-]?\d{4,6}(?:[\s\-]?[A-Z0-9]){8,24}\b"
+    # ULRs are overwhelmingly digit/hex sequences and typically end with F/P.
+    # Keeping this constrained prevents OCR-joined English words from being treated as ULRs.
+    r"\b(?:TC|CC|RC)[\s\-]?\d{4,6}(?:[\s\-]?[0-9A-F]){7,23}[\s\-]?[FP]\b"
 )
-ULR_STRICT_NORMALIZED_PATTERN = re.compile(r"^(TC|CC|RC)\d{4,6}[A-Z0-9]{8,24}$")
+# Strict normalized ULR format:
+# - starts with TC/CC/RC + 4-6 digits (certificate id)
+# - followed by 8-24 characters that are hex digits, ending in F or P
+#
+# This rejects common OCR noise like "TC6308BLACKPEPPER" or "...FDIKECHESIOAL".
+ULR_STRICT_NORMALIZED_PATTERN = re.compile(r"^(TC|CC|RC)\d{4,6}[0-9A-F]{7,23}[FP]$")
 DATE_PATTERNS = [
     re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),
     re.compile(r"\b\d{1,2}\s+[A-Z]{3,9}\s+\d{2,4}\b"),
@@ -486,23 +490,37 @@ def extract_fields(text):
         return normalized
 
     ulr = None
+    candidates: list[str] = []
+
     label_match = ULR_LABEL_PATTERN.search(clean_text)
     if label_match:
-        candidate = label_match.group(1)
-        sequence_match = ULR_SEQUENCE_PATTERN.search(candidate)
-        if sequence_match:
-            ulr = _finalize_ulr(sequence_match.group(0))
+        candidate_window = label_match.group(1)
+        candidates.extend([m.group(0) for m in ULR_SEQUENCE_PATTERN.finditer(candidate_window)])
 
-    if not ulr:
-        sequence_match = ULR_SEQUENCE_PATTERN.search(clean_text)
-        if sequence_match:
-            ulr = _finalize_ulr(sequence_match.group(0))
+    candidates.extend([m.group(0) for m in ULR_SEQUENCE_PATTERN.finditer(clean_text)])
 
-    if not ulr and certificate_no:
+    if certificate_no:
         cert_clean = certificate_no.replace("-", "")
-        ulr_match = re.search(rf"\b{cert_clean}[A-Z0-9]{{8,}}\b", clean_text)
-        if ulr_match:
-            ulr = _finalize_ulr(ulr_match.group(0))
+        # Some PDFs print the ULR without the "ULR" label. Use this as a fallback,
+        # but filter aggressively to avoid matching commodity text.
+        candidates.extend([m.group(0) for m in re.finditer(rf"\b{cert_clean}[A-Z0-9]{{8,}}\b", clean_text)])
+
+    scored: list[tuple[int, str]] = []
+    for raw_candidate in candidates:
+        normalized = _finalize_ulr(raw_candidate)
+        if not normalized:
+            continue
+        digit_count = sum(1 for ch in normalized if ch.isdigit())
+        score = digit_count * 10 + len(normalized)
+        if certificate_no:
+            cert_clean = certificate_no.replace("-", "")
+            if normalized.startswith(cert_clean):
+                score += 100
+        scored.append((score, normalized))
+
+    if scored:
+        scored.sort(key=lambda x: x[0], reverse=True)
+        ulr = scored[0][1]
 
     if not certificate_no and ulr:
         certificate_no = _cert_from_ulr_fallback(ulr)

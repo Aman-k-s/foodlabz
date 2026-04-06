@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.urls import path
 from .views import (
     ClearUploadedReportsView,
+    GeocodeView,
     LabsDirectoryView,
     ReportByIdView,
     ReportByUlrView,
@@ -23,6 +24,7 @@ def api_root(request):
                 "reports": "/api/reports/",
                 "reports_clear": "/api/reports/clear/",
                 "labs": "/api/labs/",
+                "geocode": "/api/geocode/",
                 "media": "/api/media/<file_path>/",
                 "health": "/api/health/",
             },
@@ -43,5 +45,6 @@ urlpatterns = [
     path("reports/", UploadedReportsView.as_view()),
     path("reports/clear/", ClearUploadedReportsView.as_view()),
     path("labs/", LabsDirectoryView.as_view()),
+    path("geocode/", GeocodeView.as_view()),
     path("media/<path:file_path>/", ReportMediaView.as_view()),
 ]

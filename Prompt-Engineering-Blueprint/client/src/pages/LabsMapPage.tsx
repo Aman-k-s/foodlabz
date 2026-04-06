@@ -10,7 +10,7 @@ import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
 const MAX_LABS = 200;
-const GEO_DELAY_MS = 850;
+const GEO_DELAY_MS = 150;
 
 const defaultMarkerIcon = L.icon({
   iconRetinaUrl: markerIcon2x,
@@ -70,20 +70,15 @@ function clearCache(keys: string[]) {
 }
 
 async function geocodePlace(label: string) {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "1");
+  const url = new URL("/api/geocode/", window.location.origin);
   url.searchParams.set("q", label);
 
-  const res = await fetch(url.toString(), {
-    headers: { "Accept-Language": "en" },
-  });
+  const res = await fetch(url.toString());
   if (!res.ok) return null;
-  const data = (await res.json()) as Array<{ lat: string; lon: string }>;
-  const first = data[0];
-  if (!first) return null;
-  const lat = Number(first.lat);
-  const lng = Number(first.lon);
+  const body = (await res.json()) as { success: boolean; data?: { lat: number; lng: number } };
+  if (!body?.success || !body.data) return null;
+  const { lat, lng } = body.data;
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
   if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
   return { lat, lng };
 }

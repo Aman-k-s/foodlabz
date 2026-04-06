@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 class Report(models.Model):
     file = models.FileField(upload_to="reports/")
     file_hash = models.CharField(max_length=64, unique=True)
@@ -42,3 +43,17 @@ class LabMaster(models.Model):
 
     def __str__(self):
         return f"{self.laboratory_name} - {self.cert_no} ({self.labtype})"
+
+
+class GeocodeCache(models.Model):
+    place_key = models.CharField(max_length=200, unique=True)
+    place_label = models.CharField(max_length=200)
+    lat = models.FloatField()
+    lng = models.FloatField()
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    def touch(self):
+        self.updated_at = timezone.now()
+
+    def __str__(self):
+        return f"{self.place_label} ({self.lat},{self.lng})"

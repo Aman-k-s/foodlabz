@@ -1,6 +1,10 @@
 import os
-import tempfile
+import json
 import threading
+import time
+import urllib.parse
+import urllib.request
+import tempfile
 from pathlib import Path
 
 from django.conf import settings
@@ -11,7 +15,7 @@ from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import LabMaster, Report
+from .models import GeocodeCache, LabMaster, Report
 from .utils import (
     extract_fields,
     extract_text_from_pdf,
@@ -21,6 +25,57 @@ from .utils import (
     ULR_STRICT_NORMALIZED_PATTERN,
     validate_report,
 )
+
+
+_nominatim_lock = threading.Lock()
+_nominatim_last_request = 0.0
+
+
+def _nominatim_search(place_label: str):
+    global _nominatim_last_request
+    place_label = (place_label or "").strip()
+    if not place_label:
+        return None
+
+    # Respect Nominatim usage policy: keep requests spaced out.
+    with _nominatim_lock:
+        now = time.monotonic()
+        elapsed = now - _nominatim_last_request
+        if elapsed < 1.0:
+            time.sleep(1.0 - elapsed)
+        _nominatim_last_request = time.monotonic()
+
+        params = {
+            "format": "json",
+            "limit": "1",
+            "q": place_label,
+        }
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "Accept-Language": "en",
+                # Some providers block anonymous/default UA strings.
+                "User-Agent": "FoodLabzVerification/1.0 (geocoding)",
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return None
+        if not isinstance(data, list) or not data:
+            return None
+        first = data[0]
+        try:
+            lat = float(first.get("lat"))
+            lng = float(first.get("lon"))
+        except Exception:
+            return None
+        return {"lat": lat, "lng": lng}
 
 
 def _trim_reason(message):
@@ -395,6 +450,39 @@ class LabsDirectoryView(APIView):
                 "page_size": page_size,
             }
         )
+
+
+class GeocodeView(APIView):
+    def get(self, request):
+        place = (request.GET.get("q") or "").strip()
+        if not place:
+            return Response({"success": False, "error": "Missing 'q' query parameter."}, status=400)
+
+        place_key = place.lower().strip()
+        if len(place_key) > 200:
+            place_key = place_key[:200]
+
+        cached = GeocodeCache.objects.filter(place_key=place_key).first()
+        if cached:
+            cached.touch()
+            cached.save(update_fields=["updated_at"])
+            return Response({"success": True, "data": {"lat": cached.lat, "lng": cached.lng, "source": "cache"}})
+
+        coords = _nominatim_search(place)
+        if not coords:
+            return Response({"success": False, "error": "Unable to geocode location."}, status=404)
+
+        GeocodeCache.objects.update_or_create(
+            place_key=place_key,
+            defaults={
+                "place_label": place[:200],
+                "lat": coords["lat"],
+                "lng": coords["lng"],
+                "updated_at": timezone.now(),
+            },
+        )
+
+        return Response({"success": True, "data": {**coords, "source": "nominatim"}})
 
 
 class ReportMediaView(APIView):
