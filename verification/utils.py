@@ -94,10 +94,10 @@ def extract_text_from_pdf(pdf_path):
         pdftotext_timeout = min(_env_int_clamped("PDFTOTEXT_TIMEOUT_SECONDS", 8, 3, 15), _remaining_seconds(deadline))
         text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
 
-    # Certificate number is often printed as an image label below the NABL logo.
-    # Keep OCR on page 1 as a light supplement even when pdftotext succeeds.
+    # Certificate number and ULR are often printed as image labels in many PDFs.
+    # Keep OCR on page 1 as a light supplement when either is missing from extracted text.
     page1_ocr_text = ""
-    if not _contains_certificate_number(text):
+    if not _contains_certificate_number(text) or not _contains_ulr_number(text):
         remaining = _remaining_seconds(deadline)
         if remaining and remaining > 3:
             page1_ocr_text = _extract_page_ocr_text(
@@ -264,6 +264,20 @@ def _contains_certificate_number(text):
             return True
     normalized = re.sub(r"\s+", " ", raw_text)
     return bool(CERT_PATTERN.search(normalized))
+
+
+def _contains_ulr_number(text):
+    if not text:
+        return False
+    raw_text = text.upper().replace("URL", "ULR")
+    if ULR_SEQUENCE_PATTERN.search(raw_text):
+        return True
+    normalized = re.sub(r"\s+", " ", raw_text)
+    label_match = ULR_LABEL_PATTERN.search(normalized)
+    if not label_match:
+        return False
+    candidate = normalize_ulr(label_match.group(1))
+    return bool(candidate and ULR_STRICT_NORMALIZED_PATTERN.match(candidate))
 
 
 def parse_date(date_string):
