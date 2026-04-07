@@ -4,7 +4,13 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from .models import LabMaster, Report
-from .utils import extract_fields, normalize_ulr, parse_date, validate_report
+from .utils import (
+    _direct_text_has_valid_identifiers,
+    extract_fields,
+    normalize_ulr,
+    parse_date,
+    validate_report,
+)
 
 
 class ExtractionTests(TestCase):
@@ -65,6 +71,11 @@ class ExtractionTests(TestCase):
 
     def test_ulr_normalization_fixes_common_ocr_7c_prefix(self):
         self.assertEqual(normalize_ulr("7C504024000036001F"), "TC504024000036001F")
+
+    def test_direct_text_validation_rejects_bad_extractions(self):
+        self.assertFalse(_direct_text_has_valid_identifiers("URL NO: TC1234BADULR"))
+        self.assertFalse(_direct_text_has_valid_identifiers("CERTIFICATE: 12-345"))
+        self.assertTrue(_direct_text_has_valid_identifiers("TC-12345 ULR NO: TC1234512345678901F"))
 
 
 class ReportFetchTests(TestCase):
