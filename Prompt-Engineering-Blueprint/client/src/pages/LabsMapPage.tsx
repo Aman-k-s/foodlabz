@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { useLabsDirectory, type LabDirectoryItem } from "@/hooks/use-labs";
 import { MapPinned, RefreshCcw } from "lucide-react";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -29,6 +29,8 @@ type GeoPoint = {
   lng: number;
   labs: LabDirectoryItem[];
 };
+
+type IndiaGeoJson = GeoJSON.FeatureCollection<GeoJSON.Geometry>;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -83,13 +85,37 @@ async function geocodePlace(label: string) {
   return { lat, lng };
 }
 
-function FitBounds({ points }: { points: GeoPoint[] }) {
+async function fetchIndiaStatesGeoJson() {
+  const res = await fetch("/api/india-states/");
+  if (!res.ok) {
+    throw new Error("Failed to load India states GeoJSON");
+  }
+  return (await res.json()) as IndiaGeoJson;
+}
+
+function FitBounds({
+  points,
+  indiaGeoJson,
+}: {
+  points: GeoPoint[];
+  indiaGeoJson: IndiaGeoJson | null;
+}) {
   const map = useMap();
   useEffect(() => {
-    if (!points.length) return;
-    const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng] as [number, number]));
+    const layers: L.LatLngExpression[] = points.map((point) => [point.lat, point.lng] as [number, number]);
+    let bounds = layers.length ? L.latLngBounds(layers) : null;
+
+    if (indiaGeoJson) {
+      const indiaLayer = L.geoJSON(indiaGeoJson);
+      const indiaBounds = indiaLayer.getBounds();
+      if (indiaBounds.isValid()) {
+        bounds = bounds ? bounds.extend(indiaBounds) : indiaBounds;
+      }
+    }
+
+    if (!bounds || !bounds.isValid()) return;
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
-  }, [map, points]);
+  }, [indiaGeoJson, map, points]);
   return null;
 }
 
@@ -99,6 +125,8 @@ export default function LabsMapPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [skipped, setSkipped] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [indiaGeoJson, setIndiaGeoJson] = useState<IndiaGeoJson | null>(null);
+  const [indiaGeoJsonError, setIndiaGeoJsonError] = useState(false);
 
   const groupedPlaces = useMemo(() => {
     const groups = new Map<string, { label: string; labs: LabDirectoryItem[] }>();
@@ -114,6 +142,28 @@ export default function LabsMapPage() {
     });
     return groups;
   }, [data?.items]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchIndiaStatesGeoJson()
+      .then((data) => {
+        if (!cancelled) {
+          setIndiaGeoJson(data);
+          setIndiaGeoJsonError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIndiaGeoJson(null);
+          setIndiaGeoJsonError(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -223,6 +273,11 @@ export default function LabsMapPage() {
                 {skipped} locations could not be geocoded.
               </div>
             )}
+            {indiaGeoJsonError && (
+              <div className="mb-3 text-xs text-muted-foreground">
+                India boundary overlay could not be loaded. Lab pins still work.
+              </div>
+            )}
 
             <div className="h-[70vh] w-full rounded-2xl overflow-hidden border border-white/70 shadow-inner">
               <MapContainer center={[20.5937, 78.9629]} zoom={4} className="h-full w-full">
@@ -231,6 +286,19 @@ export default function LabsMapPage() {
                   url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                   subdomains={["a", "b", "c", "d"]}
                 />
+                {indiaGeoJson && (
+                  <GeoJSON
+                    data={indiaGeoJson}
+                    style={() => ({
+                      color: "#0f5f8c",
+                      weight: 1.25,
+                      opacity: 0.9,
+                      fillColor: "#2ba7c6",
+                      fillOpacity: 0.08,
+                    })}
+                    interactive={false}
+                  />
+                )}
                 {points.map((point) => (
                   <Marker key={point.key} position={[point.lat, point.lng]} icon={defaultMarkerIcon}>
                     <Popup>
@@ -251,7 +319,7 @@ export default function LabsMapPage() {
                     </Popup>
                   </Marker>
                 ))}
-                <FitBounds points={points} />
+                <FitBounds points={points} indiaGeoJson={indiaGeoJson} />
               </MapContainer>
             </div>
           </div>

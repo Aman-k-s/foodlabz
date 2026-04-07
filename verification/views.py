@@ -11,7 +11,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -32,6 +32,7 @@ from .utils import (
 
 _nominatim_lock = threading.Lock()
 _nominatim_last_request = 0.0
+INDIA_STATES_GEOJSON_PATH = Path(settings.BASE_DIR) / "indiaStates.json"
 
 
 def _nominatim_search(place_label: str):
@@ -523,3 +524,18 @@ class ReportMediaView(APIView):
         if not requested.exists() or not requested.is_file():
             raise Http404("File not found")
         return FileResponse(requested.open("rb"), as_attachment=False, filename=requested.name)
+
+
+class IndiaStatesGeoJsonView(APIView):
+    def get(self, request):
+        geojson_path = INDIA_STATES_GEOJSON_PATH.resolve()
+        base_dir = Path(settings.BASE_DIR).resolve()
+        if base_dir not in geojson_path.parents and geojson_path != base_dir:
+            raise Http404("File not found")
+        if not geojson_path.exists() or not geojson_path.is_file():
+            raise Http404("India states GeoJSON not found")
+
+        with geojson_path.open("r", encoding="utf-8") as geojson_file:
+            data = json.load(geojson_file)
+
+        return JsonResponse(data, safe=False)
