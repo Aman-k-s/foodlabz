@@ -88,7 +88,7 @@ def _remaining_seconds(deadline):
 def extract_text_from_pdf(pdf_path):
     # Some PDFs require OCR to capture the ULR even when Poppler/pypdf find other text.
     # Give a bit more default budget in production; still clamped via env override.
-    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 120, 12, 120)
+    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 60, 12, 120)
     deadline = time.monotonic() + total_timeout_seconds
 
     text = _extract_text_with_pypdf(pdf_path) or ""
@@ -97,24 +97,24 @@ def extract_text_from_pdf(pdf_path):
         text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
 
     # Certificate number and ULR are often printed as image labels in many PDFs.
-    # Keep OCR on pages 1-2 as a light supplement when either is missing from extracted text.
-    page12_ocr_text = ""
+    # Keep OCR on page 1 as a light supplement when either is missing from extracted text.
+    page1_ocr_text = ""
     if not _contains_certificate_number(text) or not _contains_ulr_number(text):
         remaining = _remaining_seconds(deadline)
         if remaining and remaining > 3:
-            page12_ocr_text = _extract_page_ocr_text(
+            page1_ocr_text = _extract_page_ocr_text(
                 pdf_path,
                 first_page=1,
-                last_page=2,
+                last_page=1,
                 max_timeout_seconds=remaining,
             )
 
-    if text and page12_ocr_text:
-        return f"{text}\n{page12_ocr_text}"
+    if text and page1_ocr_text:
+        return f"{text}\n{page1_ocr_text}"
     if text:
         return text
-    if page12_ocr_text:
-        return page12_ocr_text
+    if page1_ocr_text:
+        return page1_ocr_text
     return ""
 
 
