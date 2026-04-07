@@ -63,6 +63,15 @@ class ExtractionTests(TestCase):
         fields = extract_fields(text)
         self.assertEqual(fields["certificate_no"], "TC-861725")
 
+    def test_certificate_prefers_ulr_when_visible_cert_is_wrong(self):
+        text = """
+        TC-11000
+        ULR No: TC584325000010153F
+        """
+        fields = extract_fields(text)
+        self.assertEqual(fields["certificate_no"], "TC-584325")
+        self.assertEqual(fields["ulr"], "TC584325000010153F")
+
     def test_ulr_normalization_fixes_common_ocr_7c_prefix(self):
         self.assertEqual(normalize_ulr("7C504024000036001F"), "TC504024000036001F")
 

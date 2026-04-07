@@ -549,8 +549,15 @@ def extract_fields(text):
         scored.sort(key=lambda x: x[0], reverse=True)
         ulr = scored[0][1]
 
-    if not certificate_no and ulr:
-        certificate_no = _cert_from_ulr_fallback(ulr)
+    ulr_derived_certificate = _cert_from_ulr_fallback(ulr) if ulr else None
+    if ulr_derived_certificate:
+        if not certificate_no:
+            certificate_no = ulr_derived_certificate
+        else:
+            normalized_certificate = normalize_cert_no(certificate_no)
+            normalized_from_ulr = normalize_cert_no(ulr_derived_certificate)
+            if normalized_certificate != normalized_from_ulr:
+                certificate_no = ulr_derived_certificate
 
     issue_date = _extract_issue_date(clean_text)
     to_date = _extract_date_by_labels(clean_text, TO_DATE_LABEL_PATTERNS)
