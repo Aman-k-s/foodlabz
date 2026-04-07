@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import re
 import subprocess
@@ -8,6 +9,8 @@ from datetime import datetime
 import pytesseract
 from pdf2image import convert_from_path
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 try:
     from pypdf import PdfReader
@@ -85,21 +88,62 @@ def _remaining_seconds(deadline):
     return max(1, int(deadline - time.monotonic()))
 
 
+def _direct_text_has_valid_identifiers(text):
+    if not text:
+        return False
+    fields = extract_fields(text)
+    certificate_no = fields.get("certificate_no")
+    ulr = fields.get("ulr")
+
+    if not certificate_no and not ulr:
+        return False
+
+    if certificate_no:
+        if normalize_cert_no(certificate_no) is None:
+            return False
+
+    if ulr:
+        normalized_ulr = normalize_ulr(ulr)
+        if not normalized_ulr or not ULR_STRICT_NORMALIZED_PATTERN.match(normalized_ulr):
+            return False
+
+    return True
+
+
 def extract_text_from_pdf(pdf_path):
     # Some PDFs require OCR to capture the ULR even when Poppler/pypdf find other text.
     # Give a bit more default budget in production; still clamped via env override.
-    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 60, 12, 120)
+    total_timeout_seconds = _env_int_clamped("OCR_TOTAL_TIMEOUT_SECONDS", 60, 12, 360)
     deadline = time.monotonic() + total_timeout_seconds
 
+    logger.debug("extract_text_from_pdf: starting extraction for %s", pdf_path)
     text = _extract_text_with_pypdf(pdf_path) or ""
-    if not text:
+    logger.debug("extract_text_from_pdf: pypdf extracted %d chars", len(text))
+
+    if not _direct_text_has_valid_identifiers(text):
+        logger.debug("extract_text_from_pdf: pypdf text failed identifier validation, trying pdftotext")
+        text = ""
         pdftotext_timeout = min(_env_int_clamped("PDFTOTEXT_TIMEOUT_SECONDS", 8, 3, 15), _remaining_seconds(deadline))
-        text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
+        pdftotext_text = _extract_text_with_pdftotext(pdf_path, timeout_seconds=pdftotext_timeout) or ""
+        logger.debug("extract_text_from_pdf: pdftotext extracted %d chars", len(pdftotext_text))
+        if _direct_text_has_valid_identifiers(pdftotext_text):
+            text = pdftotext_text
+            logger.debug("extract_text_from_pdf: pdftotext text passed identifier validation")
+        else:
+            logger.debug("extract_text_from_pdf: pdftotext text also failed identifier validation")
+
+    if text:
+        logger.debug(
+            "extract_text_from_pdf: direct text accepted, certificate=%s, ulr=%s",
+            extract_fields(text).get("certificate_no"),
+            extract_fields(text).get("ulr"),
+        )
 
     # Certificate number and ULR are often printed as image labels in many PDFs.
     # Keep OCR on page 1 as a light supplement when either is missing from extracted text.
     page1_ocr_text = ""
     if not _contains_certificate_number(text) or not _contains_ulr_number(text):
+        logger.debug("extract_text_from_pdf: direct extraction missing identifiers, trying OCR")
         remaining = _remaining_seconds(deadline)
         if remaining and remaining > 3:
             page1_ocr_text = _extract_page_ocr_text(
@@ -108,13 +152,19 @@ def extract_text_from_pdf(pdf_path):
                 last_page=1,
                 max_timeout_seconds=remaining,
             )
+            logger.debug("extract_text_from_pdf: OCR extracted %d chars", len(page1_ocr_text))
 
     if text and page1_ocr_text:
+        logger.debug("extract_text_from_pdf: returning combined direct text and OCR text")
         return f"{text}\n{page1_ocr_text}"
     if text:
+        logger.debug("extract_text_from_pdf: returning direct text only")
         return text
     if page1_ocr_text:
+        logger.debug("extract_text_from_pdf: returning OCR text only")
         return page1_ocr_text
+
+    logger.debug("extract_text_from_pdf: no text extracted from PDF")
     return ""
 
 

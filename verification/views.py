@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import threading
 import time
 import urllib.parse
@@ -14,6 +15,8 @@ from django.http import FileResponse, Http404
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 from .models import GeocodeCache, LabMaster, Report
 from .utils import (
@@ -168,24 +171,38 @@ def _extract_text_from_uploaded_pdf(file_obj):
 
 
 def _process_uploaded_report(report_id):
+    logger.info(f"Starting report processing for report_id={report_id}")
     try:
         report = Report.objects.get(id=report_id)
+        logger.info(f"Retrieved report {report_id}: status={report.status}, file={report.file.name if report.file else None}")
     except Report.DoesNotExist:
+        logger.warning(f"Report {report_id} not found in database")
         return
 
     try:
         file_path = report.file.path
+        logger.debug(f"Report {report_id}: Extracting text from PDF at {file_path}")
         text = extract_text_from_pdf(file_path)
+        logger.debug(f"Report {report_id}: Extracted {len(text)} characters from PDF")
+        
         extracted = extract_fields(text)
+        logger.debug(f"Report {report_id}: Extracted fields: {list(extracted.keys())}")
 
         report.accreditation_no = extracted.get("certificate_no")
+        logger.debug(f"Report {report_id}: Certificate No = {report.accreditation_no}")
+        
         extracted_ulr = normalize_ulr(extracted.get("ulr"))
+        logger.debug(f"Report {report_id}: Extracted ULR = {extracted_ulr}")
+        
         if extracted_ulr and ULR_STRICT_NORMALIZED_PATTERN.match(extracted_ulr):
             report.ulr_number = extracted_ulr
+            logger.info(f"Report {report_id}: ULR number set to {extracted_ulr}")
         else:
             report.ulr_number = None
+            logger.warning(f"Report {report_id}: ULR '{extracted_ulr}' failed pattern validation")
 
         if report.ulr_number:
+            logger.debug(f"Report {report_id}: Checking for duplicate ULR {report.ulr_number}")
             duplicate_report = (
                 Report.objects.filter(ulr_number__iexact=report.ulr_number)
                 .exclude(id=report.id)
@@ -193,6 +210,7 @@ def _process_uploaded_report(report_id):
                 .first()
             )
             if duplicate_report:
+                logger.warning(f"Report {report_id}: Duplicate ULR found in report {duplicate_report.id}")
                 _reject_report(
                     report,
                     "This ULR number has already been uploaded in the demo database. Clear demo reports to upload it again.",
@@ -200,23 +218,34 @@ def _process_uploaded_report(report_id):
                 return
 
         upload_date = timezone.localdate()
+        logger.debug(f"Report {report_id}: Validating report with upload_date={upload_date}")
+        
         lab, status, rejection_reason = validate_report(
             extracted,
             report_id=report.id,
             upload_date=upload_date,
         )
+        logger.info(f"Report {report_id}: Validation complete - status={status}, lab_found={lab is not None}, rejection_reason={rejection_reason}")
+        
         report.status = status
         report.validation_score = 100 if status == "VALID" else 0
         report.rejection_reason = rejection_reason
 
         if lab:
+            logger.info(f"Report {report_id}: Matched lab={lab.laboratory_name}, lab_id={lab.lab_id}")
             report.lab_name = lab.laboratory_name
             report.accreditation_no = lab.cert_no
             if not report.ulr_number and lab.ulr_number:
                 report.ulr_number = normalize_ulr(lab.ulr_number)
+                logger.info(f"Report {report_id}: Backfilled ULR from lab: {report.ulr_number}")
+        else:
+            logger.warning(f"Report {report_id}: No lab match found")
 
         report.save()
+        logger.info(f"Report {report_id}: Successfully saved with status={report.status}")
+        
     except Exception as exc:
+        logger.exception(f"Report {report_id}: Exception occurred during processing: {exc}", exc_info=True)
         _reject_report(report, str(exc))
 
 
